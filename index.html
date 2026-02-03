@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Control API - Документация</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Боковое меню */
+        .sidebar {
+            width: 280px;
+            background: #161b22;
+            color: #c9d1d9;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 20px 0;
+            border-right: 1px solid #30363d;
+        }
+
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.4em;
+            margin-bottom: 5px;
+        }
+
+        .sidebar-header p {
+            font-size: 0.85em;
+            opacity: 0.7;
+        }
+
+        .nav-menu {
+            padding: 20px 0;
+        }
+
+        .nav-section {
+            margin-bottom: 20px;
+        }
+
+        .nav-section-title {
+            padding: 8px 20px;
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.5;
+            font-weight: 600;
+        }
+
+        .nav-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            display: flex;
+            align-items: center;
+        }
+
+        .nav-item:hover {
+            background: #21262d;
+            border-left-color: #58a6ff;
+        }
+
+        .nav-item.active {
+            background: #1f6feb20;
+            border-left-color: #58a6ff;
+        }
+
+        .nav-item-icon {
+            margin-right: 10px;
+            font-size: 1.1em;
+        }
+
+        /* Основной контент */
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            padding: 40px 60px;
+            max-width: 1200px;
+        }
+
+        .content-section {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .content-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Заголовки */
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #f0f6fc;
+        }
+
+        h2 {
+            font-size: 1.8em;
+            margin: 30px 0 15px;
+            color: #f0f6fc;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #30363d;
+        }
+
+        h3 {
+            font-size: 1.3em;
+            margin: 20px 0 10px;
+            color: #e6edf3;
+        }
+
+        /* Карточки функций */
+        .function-card {
+            background: #161b22;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid #30363d;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .function-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .function-name {
+            font-family: 'Courier New', monospace;
+            font-size: 1.2em;
+            color: #ff7b72;
+            font-weight: 600;
+        }
+
+        .function-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            margin-left: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-init { background: #9e6a03; color: #ffd580; }
+        .badge-event { background: #0969da; color: #79c0ff; }
+        .badge-update { background: #1a7f37; color: #7ee787; }
+        .badge-method { background: #6e7681; color: #e6edf3; }
+
+        .function-description {
+            color: #8b949e;
+            margin-bottom: 15px;
+            line-height: 1.7;
+        }
+
+        /* Блоки кода */
+        .code-block {
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+            margin: 15px 0;
+            border: 1px solid #30363d;
+        }
+
+        .code-block .keyword { color: #ff7b72; }
+        .code-block .string { color: #a5d6ff; }
+        .code-block .comment { color: #8b949e; font-style: italic; }
+        .code-block .function { color: #d2a8ff; }
+        .code-block .number { color: #79c0ff; }
+
+        /* Параметры */
+        .params-section {
+            background: #0d1117;
+            border-left: 4px solid #58a6ff;
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 4px;
+            border: 1px solid #30363d;
+        }
+
+        .params-section h4 {
+            color: #58a6ff;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+
+        .param-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .param-item:last-child {
+            border-bottom: none;
+        }
+
+        .param-name {
+            font-family: 'Courier New', monospace;
+            color: #ff7b72;
+            font-weight: 600;
+        }
+
+        .param-type {
+            color: #8b949e;
+            font-size: 0.9em;
+            font-style: italic;
+        }
+
+        /* Информационные блоки */
+        .info-box {
+            background: #0d1117;
+            border-left: 4px solid #58a6ff;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+        }
+
+        .info-box.warning {
+            background: #1c1308;
+            border-left-color: #f0883e;
+            border-color: #9e6a03;
+        }
+
+        .info-box.success {
+            background: #0f1c12;
+            border-left-color: #3fb950;
+            border-color: #1a7f37;
+        }
+
+        /* Список возможностей */
+        .features-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .features-list li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+            color: #c9d1d9;
+        }
+
+        .features-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #3fb950;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        /* Таблица */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+        }
+
+        th {
+            background: #161b22;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #30363d;
+            color: #f0f6fc;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #30363d;
+            color: #c9d1d9;
+        }
+
+        tr:hover {
+            background: #161b22;
+        }
+
+        code {
+            background: #161b22;
+            color: #ff7b72;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+
+        /* Скроллбар */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 5px;
+            border: 2px solid #0d1117;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Боковое меню -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>Robot Control API</h1>
+                <p>Документация v1.0</p>
+            </div>
+            <nav class="nav-menu" id="navMenu">
+                <!-- Меню генерируется динамически -->
+            </nav>
+        </aside>
+
+        <!-- Основной контент -->
+        <main class="main-content" id="mainContent">
+            <!-- Контент генерируется динамически -->
+        </main>
+    </div>
+
+    <script>
+        // Структура документации - легко добавлять новые секции
+        const documentation = {
+            overview: {
+                title: "Обзор",
+                icon: "",
+                category: "Начало работы",
+                content: `
+                    <h1>Документация Robot Control API</h1>
+                    <p style="font-size: 1.1em; color: #7f8c8d; margin-bottom: 30px;">
+                        Полное руководство по использованию API для управления 6-осевым роботом
+                    </p>
+
+                    <div class="info-box">
+                        <strong>О проекте:</strong> Приложение на PyQt5 для управления роботом-манипулятором с графическим интерфейсом.
+                    </div>
+
+                    <h2>Основные возможности</h2>
+                    <ul class="features-list">
+                        <li>Управление 6 моторами через интуитивный интерфейс</li>
+                        <li>Переключение между режимами координат (градусы/декартовы)</li>
+                        <li>Визуальные индикаторы состояния робота</li>
+                        <li>Кнопка Старт/Стоп для управления работой</li>
+                        <li>Таблица с отображением текущих значений моторов</li>
+                        <li>Автоматическое обновление интерфейса каждые 50 мс</li>
+                    </ul>
+
+                    <h2>Структура класса</h2>
+                    <div class="function-card">
+                        <div class="code-block">
+<span class="keyword">class</span> <span class="function">Ui_Main</span>(QMainWindow, ui.Ui_MainWindow):
+    <span class="comment"># Главный класс приложения</span>
+    <span class="keyword">def</span> <span class="function">__init__</span>(self): ...
+    <span class="keyword">def</span> <span class="function">button_click</span>(self): ...
+    <span class="keyword">def</span> <span class="function">change_cords</span>(self, s): ...
+    <span class="keyword">def</span> <span class="function">updates</span>(self): ...
+    <span class="keyword">def</span> <span class="function">mot1-6</span>(self, p): ...
+                        </div>
+                    </div>
+
+                    <h2>Быстрый старт</h2>
+                    <div class="code-block">
+<span class="keyword">from</span> PyQt5.QtWidgets <span class="keyword">import</span> QApplication
+
+<span class="comment"># Создание приложения</span>
+app = QApplication([])
+
+<span class="comment"># Создание окна</span>
+window = Ui_Main()
+window.show()
+
+<span class="comment"># Запуск</span>
+app.exec()
+                    </div>
+                `
+            },
+
+            class_main: {
+                title: "Класс Ui_Main",
+                icon: "",
+                category: "API Reference",
+                content: `
+                    <h1>Класс Ui_Main</h1>
+                    
+                    <div class="function-card">
+                        <div class="function-header">
+                            <span class="function-name">class Ui_Main(QMainWindow, ui.Ui_MainWindow)</span>
+                        </div>
+                        <div class="function-description">
+                            Главный класс приложения, который наследуется от QMainWindow и ui.Ui_MainWindow. 
+                            Отвечает за создание графического интерфейса управления роботом с 6 моторами.
+                        </div>
+
+                        <div class="params-section">
+                            <h4>Наследование:</h4>
+                            <div class="param-item">
+                                <span class="param-name">QMainWindow</span> - базовый класс главного окна Qt
+                            </div>
+                            <div class="param-item">
+                                <span class="param-name">ui.Ui_MainWindow</span> - сгенерированный UI класс
+                            </div>
+                        </div>
+
+                        <div class="params-section">
+                            <h4>Атрибуты класса:</h4>
+                            <div class="param-item">
+                                <span class="param-name">turnon</span> <span class="param-type">(bool)</span> - флаг состояния работы робота
+                            </div>
+                            <div class="param-item">
+                                <span class="param-name">color</span> <span class="param-type">(int)</span> - индикатор текущего состояния (0-4)
+                            </div>
+                            <div class="param-item">
+                                <span class="param-name">motors</span> <span class="param-type">(list)</span> - массив значений для 6 моторов
+                            </div>
+                            <div class="param-item">
+                                <span class="param-name">timer</span> <span class="param-type">(QTimer)</span> - таймер обновления интерфейса
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+
+            init_method: {
+                title: "__init__",
+                icon: "",
+                category: "API Reference",
+                content: `
+                    <h1>Метод __init__</h1>
+                    
+                    <div class="function-card">
+                        <div class="function-header">
+                            <span class="function-name">def __init__(self)</span>
+                            <span class="function-badge badge-init">Инициализация</span>
+                        </div>
+                        <div class="function-description">
+                            Конструктор класса, который инициализирует все компоненты интерфейса и настраивает начальное состояние приложения.
+                        </div>
+
+                        <h3>Инициализируемые переменные</h3>
+                        <div class="params-section">
+                            <div class="param-item">
+                                <span class="param-name">self.turnon</span> = <span class="number">False</span>
+                                <p style="margin-top: 5px; color: #7f8c8d;">Флаг состояния работы робота (включен/выключен)</p>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-name">self.color</span> = <span class="number">0</span>
+                                <p style="margin-top: 5px; color: #7f8c8d;">Индикатор текущего состояния (0-4)</p>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-name">self.motors</span> = [0, 0, 0, 0, 0, 0]
+                                <p style="margin-top: 5px; color: #7f8c8d;">Массив значений для 6 моторов</p>
+                            </div>
+                        </div>
+
+                        <h3>Подключаемые события</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Компонент</th>
+                                        <th>Событие</th>
+                                        <th>Обработчик</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>pushButton_10</code></td>
+                                        <td>clicked</td>
+                                        <td><code>button_click()</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>comboBox</code></td>
+                                        <td>currentTextChanged</td>
+                                        <td><code>change_cords()</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>horizontalSlider (1-6)</code></td>
+                                        <td>valueChanged</td>
+                                        <td><code>mot1-6()</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>timer</code></td>
+                                        <td>timeout (50ms)</td>
+                                        <td><code>updates()</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h3>Полный код метода</h3>
+                        <div class="code-block">
+<span class="keyword">def</span> <span class="function">__init__</span>(self):
+    <span class="function">super</span>().__init__()
+    self.turnon = <span class="keyword">False</span>
+    self.color = <span class="number">0</span>
+    self.motors = [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]
+    self.setupUi(self)
+    self.pushButton_10.clicked.connect(self.button_click)
+    self.comboBox.currentTextChanged.connect(self.change_cords)
+    self.timer = QTimer(self)
+    self.timer.timeout.connect(self.updates)
+    self.timer.start(<span class="number">50</span>)
+    self.horizontalSlider.valueChanged.connect(self.mot1)
+    self.horizontalSlider_2.valueChanged.connect(self.mot2)
+    self.horizontalSlider_3.valueChanged.connect(self.mot3)
+    self.horizontalSlider_4.valueChanged.connect(self.mot4)
+    self.horizontalSlider_5.valueChanged.connect(self.mot5)
+    self.horizontalSlider_6.valueChanged.connect(self.mot6)
+                        </div>
+                    </div>
+                `
+            },
+
+            button_click: {
+                title: "button_click",
+                icon: "",
+                category: "API Reference",
+                content: `
+                    <h1>Метод button_click</h1>
+                    
+                    <div class="function-card">
+                        <div class="function-header">
+                            <span class="function-name">def button_click(self)</span>
+                            <span class="function-badge badge-event">Обработчик события</span>
+                        </div>
+                        <div class="function-description">
+                            Обрабатывает нажатие кнопки Старт/Стоп. Переключает состояние работы робота между включенным и выключенным режимами.
+                        </div>
+
+                        <h3>Логика работы</h3>
+                        <div class="info-box">
+                            <p>Метод инвертирует значение <code>self.turnon</code> и обновляет визуальное состояние кнопки и индикаторов.</p>
+                        </div>
+
+                        <div class="params-section">
+                            <h4>Состояния:</h4>
+                            <div class="param-item">
+                                <strong>Включено (turnon = True):</strong>
+                                <ul style="margin-top: 5px;">
+                                    <li>Текст кнопки → "Стоп"</li>
+                                    <li>Индикатор → синий (color = 1)</li>
+                                </ul>
+                            </div>
+                            <div class="param-item">
+                                <strong>Выключено (turnon = False):</strong>
+                                <ul style="margin-top: 5px;">
+                                    <li>Текст кнопки → "Старт"</li>
+                                    <li>Индикатор → белый (color = 0)</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <h3>Полный код метода</h3>
+                        <div class="code-block">
+<span class="keyword">def</span> <span class="function">button_click</span>(self):
+    self.turnon = <span class="keyword">not</span> self.turnon
+    <span class="keyword">if</span> self.turnon:
+        self.pushButton_10.setText(<span class="string">"Стоп"</span>)
+        self.color = <span class="number">1</span>
+    <span class="keyword">else</span>:
+        self.pushButton_10.setText(<span class="string">"Старт"</span>)
+        self.color = <span class="number">0</span>
+                        </div>
+
+                        <h3>Использование</h3>
+                        <div class="code-block">
+<span class="comment"># Подключение в __init__</span>
+self.pushButton_10.clicked.connect(self.button_click)
+                        </div>
+                    </div>
+                `
+            },
+
+            change_cords: {
+                title: "change_cords",
+                icon: "",
+                category: "API Reference",
+                content: `
+                    <h1>Метод change_cords</h1>
+                    
+                    <div class="function-card">
+                        <div class="function-header">
+                            <span class="function-name">def change_cords(self, s)</span>
+                            <span class="function-badge badge-event">Обработчик события</span>
+                        </div>
+                        <div class="function-description">
+                            Переключает режим отображения координат между градусами (углами суставов) и декартовыми координатами.
+                        </div>
+
+                        <h3>Параметры</h3>
+                        <div class="params-section">
+                            <div class="param-item">
+                                <span class="param-name">s</span> <span class="param-type">(str)</span>
+                                <p style="margin-top: 5px; color: #7f8c8d;">Выбранный текст из ComboBox</p>
+                            </div>
+                        </div>
+
+                        <h3>Режимы отображения</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Режим</th>
+                                        <th>Метки осей</th>
+                                        <th>Описание</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>"по градусам"</strong></td>
+                                        <td>J1, J2, J3, J4, J5, J6</td>
+                                        <td>Углы суставов робота в градусах</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>"по координатам"</strong></td>
+                                        <td>X, Y, Z, Rx, Ry, Rz</td>
+                                        <td>Позиция и ориентация в декартовом пространстве</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h3>Полный код метода</h3>
+                        <div class="code-block">
+<span class="keyword">def</span> <span class="function">change_cords</span>(self, s):
+    <span class="keyword">if</span> s == <span class="string">"по градусам"</span>:
+        self.label.setText(<span class="string">"J1"</span>)
+        self.label_2.setText(<span class="string">"J2"</span>)
+        self.label_3.setText(<span class="string">"J3"</span>)
+        self.label_4.setText(<span class="string">"J4"</span>)
+        self.label_5.setText(<span class="string">"J5"</span>)
+        self.label_6.setText(<span class="string">"J6"</span>)
+    <span class="keyword">elif</span> s == <span class="string">"по координатам"</span>:
+        self.label.setText(<span class="string">"X"</span>)
+        self.label_2.setText(<span class="string">"Y"</span>)
+        self.label_3.setText(<span class="string">"Z"</span>)
+        self.label_4.setText(<span class="string">"Rx"</span>)
+        self.label_5.setText(<span class="string">"Ry"</span>)
+        self.label_6.setText(<span class="string">"Rz"</span>)
+                        </div>
+                    </div>
+                `
+            },
+
+            updates: {
+                title: "updates",
+                icon: "",
+                category: "API Reference",
+                content: `
+                    <h1>Метод updates</h1>
+                    
+                    <div class="function-card">
+                        <div class="function-header">
+                            <span class="function-name">def updates(self)</span>
+                            <span class="function-badge badge-update">Обновление</span>
+                        </div>
+                        <div class="function-description">
+                            Вызывается таймером каждые 50 мс. Обновляет визуальные индикаторы состояния и таблицу с данными моторов.
+                        </div>
+
+                        <div class="info-box warning">
+                            <strong> Важно:</strong> Метод вызывается автоматически таймером. Частота обновления: 20 раз в секунду (50 мс).
+                        </div>
+
+                        <h3>Цветовые индикаторы состояния</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Значение color</th>
+                                        <th>Цвет индикатора</th>
+                                        <th>Состояние</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>0</code></td>
+                                        <td> Белый (все)</td>
+                                        <td>Робот остановлен</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>1</code></td>
+                                        <td> Синий (label_8)</td>
+                                        <td>Робот работает</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>2</code></td>
+                                        <td> Зелёный (label_9)</td>
+                                        <td>Состояние 2</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>3</code></td>
+                                        <td> Жёлтый (label_10)</td>
+                                        <td>Состояние 3</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>4</code></td>
+                                        <td> Красный (label_11)</td>
+                                        <td>Ошибка/Предупреждение</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h3>Обновление таблицы</h3>
+                        <div class="params-section">
+                            <div class="param-item">
+                                Для каждого из 6 моторов обновляет значение в 4-й колонке таблицы (<code>tableWidget</code>)
+                            </div>
+                        </div>
+
+                        <h3>Полный код метода</h3>
+                        <div class="code-block">
+<span class="keyword">def</span> <span class="function">updates</span>(self):
+    <span class="keyword">if</span> self.color == <span class="number">0</span>:
+        self.label_8.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_9.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_10.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_11.setStyleSheet(<span class="string">"background-color : white;"</span>)
+    <span class="keyword">elif</span> self.color == <span class="number">1</span>:
+        self.label_8.setStyleSheet(<span class="string">"background-color : blue;"</span>)
+        self.label_9.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_10.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_11.setStyleSheet(<span class="string">"background-color : white;"</span>)
+    <span class="keyword">elif</span> self.color == <span class="number">2</span>:
+        self.label_8.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_9.setStyleSheet(<span class="string">"background-color : green;"</span>)
+        self.label_10.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_11.setStyleSheet(<span class="string">"background-color : white;"</span>)
+    <span class="keyword">elif</span> self.color == <span class="number">3</span>:
+        self.label_8.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_9.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_10.setStyleSheet(<span class="string">"background-color : yellow;"</span>)
+        self.label_11.setStyleSheet(<span class="string">"background-color : white;"</span>)
+    <span class="keyword">elif</span> self.color == <span class="number">4</span>:
+        self.label_8.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_9.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_10.setStyleSheet(<span class="string">"background-color : white;"</span>)
+        self.label_11.setStyleSheet(<span class="string">"background-color : red;"</span>)
+
+    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="function">range</span>(<span class="number">6</span>):
+        self.tableWidget.setItem(i, <span class="number">3</span>, QTableWidgetItem(<span class="function">str</span>(self.motors[i])))
+                        </div>
+                    </div>
+                `
+            },
+
+            motors: {
+                title: "mot1-mot6",
+                icon: "",
+                category: "API Reference",
+                content: `
+                    <h1>Методы управления моторами</h1>
+                    
+                    <div class="function-card">
+                        <div class="function-header">
+                            <span class="function-name">def mot1(self, p) ... def mot6(self, p)</span>
+                            <span class="function-badge badge-method">Контроллеры</span>
+                        </div>
+                        <div class="function-description">
+                            Шесть идентичных методов для управления каждым из 6 моторов робота. 
+                            Каждый метод привязан к соответствующему слайдеру в интерфейсе.
+                        </div>
+
+                        <h3>Параметры</h3>
+                        <div class="params-section">
+                            <div class="param-item">
+                                <span class="param-name">p</span> <span class="param-type">(int)</span>
+                                <p style="margin-top: 5px; color: #7f8c8d;">Новое значение позиции мотора, полученное от слайдера</p>
+                            </div>
+                        </div>
+
+                        <h3>Список методов</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Метод</th>
+                                        <th>Индекс массива</th>
+                                        <th>Слайдер</th>
+                                        <th>Описание</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>mot1(p)</code></td>
+                                        <td>motors[0]</td>
+                                        <td>horizontalSlider</td>
+                                        <td>Первый мотор</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>mot2(p)</code></td>
+                                        <td>motors[1]</td>
+                                        <td>horizontalSlider_2</td>
+                                        <td>Второй мотор</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>mot3(p)</code></td>
+                                        <td>motors[2]</td>
+                                        <td>horizontalSlider_3</td>
+                                        <td>Третий мотор</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>mot4(p)</code></td>
+                                        <td>motors[3]</td>
+                                        <td>horizontalSlider_4</td>
+                                        <td>Четвёртый мотор</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>mot5(p)</code></td>
+                                        <td>motors[4]</td>
+                                        <td>horizontalSlider_5</td>
+                                        <td>Пятый мотор</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>mot6(p)</code></td>
+                                        <td>motors[5]</td>
+                                        <td>horizontalSlider_6</td>
+                                        <td>Шестой мотор</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h3>Полный код всех методов</h3>
+                        <div class="code-block">
+<span class="keyword">def</span> <span class="function">mot1</span>(self, p):
+    self.motors[<span class="number">0</span>] = p
+
+<span class="keyword">def</span> <span class="function">mot2</span>(self, p):
+    self.motors[<span class="number">1</span>] = p
+
+<span class="keyword">def</span> <span class="function">mot3</span>(self, p):
+    self.motors[<span class="number">2</span>] = p
+
+<span class="keyword">def</span> <span class="function">mot4</span>(self, p):
+    self.motors[<span class="number">3</span>] = p
+
+<span class="keyword">def</span> <span class="function">mot5</span>(self, p):
+    self.motors[<span class="number">4</span>] = p
+
+<span class="keyword">def</span> <span class="function">mot6</span>(self, p):
+    self.motors[<span class="number">5</span>] = p
+                        </div>
+
+                        <h3>Подключение в __init__</h3>
+                        <div class="code-block">
+<span class="comment"># Подключение всех слайдеров к методам</span>
+self.horizontalSlider.valueChanged.connect(self.mot1)
+self.horizontalSlider_2.valueChanged.connect(self.mot2)
+self.horizontalSlider_3.valueChanged.connect(self.mot3)
+self.horizontalSlider_4.valueChanged.connect(self.mot4)
+self.horizontalSlider_5.valueChanged.connect(self.mot5)
+self.horizontalSlider_6.valueChanged.connect(self.mot6)
+                        </div>
+
+                        <div class="info-box success">
+                            <strong> Совет:</strong> Значения моторов автоматически отображаются в таблице благодаря методу <code>updates()</code>.
+                        </div>
+                    </div>
+                `
+            },
+
+            main_code: {
+                title: "Запуск приложения",
+                icon: "",
+                category: "Примеры",
+                content: `
+                    <h1>Основной код запуска приложения</h1>
+                    
+                    <div class="function-card">
+                        <div class="function-header">
+                            <span class="function-badge badge-method">Точка входа</span>
+                        </div>
+                        <div class="function-description">
+                            Создаёт и запускает приложение PyQt5 с графическим интерфейсом управления роботом.
+                        </div>
+
+                        <h3>Последовательность действий</h3>
+                        <div class="params-section">
+                            <div class="param-item">
+                                <strong>1. Создание приложения</strong>
+                                <p style="margin-top: 5px;"><code>app = QApplication([])</code> - создаёт экземпляр приложения Qt</p>
+                            </div>
+                            <div class="param-item">
+                                <strong>2. Создание окна</strong>
+                                <p style="margin-top: 5px;"><code>window = Ui_Main()</code> - создаёт главное окно приложения</p>
+                            </div>
+                            <div class="param-item">
+                                <strong>3. Отображение окна</strong>
+                                <p style="margin-top: 5px;"><code>window.show()</code> - отображает окно на экране</p>
+                            </div>
+                            <div class="param-item">
+                                <strong>4. Запуск цикла событий</strong>
+                                <p style="margin-top: 5px;"><code>app.exec()</code> - запускает главный цикл обработки событий</p>
+                            </div>
+                        </div>
+
+                        <h3>Полный код запуска</h3>
+                        <div class="code-block">
+<span class="keyword">from</span> PyQt5.QtCore <span class="keyword">import</span> QTimer
+
+<span class="keyword">import</span> ui
+<span class="keyword">from</span> PyQt5.QtWidgets <span class="keyword">import</span> QMainWindow, QApplication
+<span class="keyword">from</span> PyQt5.QtWidgets <span class="keyword">import</span> QApplication, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+
+
+
+<span class="keyword">class</span> <span class="function">Ui_Main</span>(QMainWindow, ui.Ui_MainWindow):
+    <span class="keyword">def</span> <span class="function">__init__</span>(self):
+        <span class="comment"># ... весь код класса ...</span>
+
+app = QApplication([])
+
+window = Ui_Main()
+window.show()
+
+app.exec()
+                        </div>
+
+                        <div class="info-box">
+                            <strong> Примечание:</strong> Метод <code>exec()</code> блокирует выполнение до закрытия приложения. 
+                            Все события обрабатываются в цикле событий Qt.
+                        </div>
+                    </div>
+                `
+            }
+        };
+
+        // Функция для генерации меню
+        function generateMenu() {
+            const navMenu = document.getElementById('navMenu');
+            const categories = {};
+
+            // Группировка по категориям
+            Object.keys(documentation).forEach(key => {
+                const item = documentation[key];
+                if (!categories[item.category]) {
+                    categories[item.category] = [];
+                }
+                categories[item.category].push({ key, ...item });
+            });
+
+            // Создание меню
+            Object.keys(categories).forEach(category => {
+                const section = document.createElement('div');
+                section.className = 'nav-section';
+                
+                const title = document.createElement('div');
+                title.className = 'nav-section-title';
+                title.textContent = category;
+                section.appendChild(title);
+
+                categories[category].forEach(item => {
+                    const navItem = document.createElement('div');
+                    navItem.className = 'nav-item';
+                    navItem.dataset.section = item.key;
+                    navItem.innerHTML = `
+                        <span class="nav-item-icon">${item.icon}</span>
+                        <span>${item.title}</span>
+                    `;
+                    navItem.onclick = () => showSection(item.key);
+                    section.appendChild(navItem);
+                });
+
+                navMenu.appendChild(section);
+            });
+        }
+
+        // Функция для отображения секции
+        function showSection(sectionKey) {
+            // Удаление активного класса у всех секций
+            document.querySelectorAll('.content-section').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // Добавление активного класса
+            const section = document.getElementById(sectionKey);
+            if (section) {
+                section.classList.add('active');
+            }
+            const navItem = document.querySelector(`[data-section="${sectionKey}"]`);
+            if (navItem) {
+                navItem.classList.add('active');
+            }
+        }
+
+        // Функция для генерации контента
+        function generateContent() {
+            const mainContent = document.getElementById('mainContent');
+            
+            Object.keys(documentation).forEach(key => {
+                const section = document.createElement('div');
+                section.id = key;
+                section.className = 'content-section';
+                section.innerHTML = documentation[key].content;
+                mainContent.appendChild(section);
+            });
+        }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', () => {
+            generateMenu();
+            generateContent();
+            showSection('overview'); // Показать первую секцию
+        });
+    </script>
+</body>
+</html>
