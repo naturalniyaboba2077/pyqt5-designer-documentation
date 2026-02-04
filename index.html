@@ -3,1068 +3,1099 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Robot Control API - Документация</title>
+    <title>Форум — Robot Control API | Документация и обсуждения</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: #0d1117;
-            color: #c9d1d9;
-            line-height: 1.6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1d23;
+            color: #d4d6d9;
+            line-height: 1.65;
+        }
+
+        .forum-header {
+            background: linear-gradient(180deg, #252930 0%, #1e2128 100%);
+            border-bottom: 2px solid #3d434e;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .forum-logo {
+            font-size: 1.6em;
+            font-weight: 700;
+            color: #7eb8da;
+        }
+
+        .forum-nav {
+            display: flex;
+            gap: 20px;
+        }
+
+        .forum-nav a {
+            color: #9ca3af;
+            text-decoration: none;
+        }
+
+        .forum-nav a:hover {
+            color: #7eb8da;
+        }
+
+        .breadcrumb {
+            padding: 10px 24px;
+            background: #22262d;
+            color: #6b7280;
+            font-size: 0.9em;
+            border-bottom: 1px solid #2d323c;
+        }
+
+        .breadcrumb a {
+            color: #7eb8da;
+            text-decoration: none;
         }
 
         .container {
-            display: flex;
-            min-height: 100vh;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px;
         }
 
-        /* Боковое меню */
-        .sidebar {
-            width: 280px;
-            background: #161b22;
-            color: #c9d1d9;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            padding: 20px 0;
-            border-right: 1px solid #30363d;
-        }
-
-        .sidebar-header {
-            padding: 0 20px 20px;
-            border-bottom: 1px solid #30363d;
-        }
-
-        .sidebar-header h1 {
-            font-size: 1.4em;
-            margin-bottom: 5px;
-        }
-
-        .sidebar-header p {
-            font-size: 0.85em;
-            opacity: 0.7;
-        }
-
-        .nav-menu {
-            padding: 20px 0;
-        }
-
-        .nav-section {
-            margin-bottom: 20px;
-        }
-
-        .nav-section-title {
-            padding: 8px 20px;
-            font-size: 0.75em;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            opacity: 0.5;
-            font-weight: 600;
-        }
-
-        .nav-item {
-            padding: 10px 20px;
-            cursor: pointer;
-            transition: all 0.2s;
-            border-left: 3px solid transparent;
-            display: flex;
-            align-items: center;
-        }
-
-        .nav-item:hover {
-            background: #21262d;
-            border-left-color: #58a6ff;
-        }
-
-        .nav-item.active {
-            background: #1f6feb20;
-            border-left-color: #58a6ff;
-        }
-
-        .nav-item-icon {
-            margin-right: 10px;
-            font-size: 1.1em;
-        }
-
-        /* Основной контент */
-        .main-content {
-            margin-left: 280px;
-            flex: 1;
-            padding: 40px 60px;
-            max-width: 1200px;
-        }
-
-        .content-section {
-            display: none;
-            animation: fadeIn 0.3s ease-in;
-        }
-
-        .content-section.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Заголовки */
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            color: #f0f6fc;
-        }
-
-        h2 {
-            font-size: 1.8em;
-            margin: 30px 0 15px;
-            color: #f0f6fc;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #30363d;
-        }
-
-        h3 {
-            font-size: 1.3em;
-            margin: 20px 0 10px;
-            color: #e6edf3;
-        }
-
-        /* Карточки функций */
-        .function-card {
-            background: #161b22;
+        .forum-category {
+            background: #252930;
+            border: 1px solid #3d434e;
             border-radius: 8px;
-            padding: 25px;
             margin-bottom: 20px;
-            border: 1px solid #30363d;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
         }
 
-        .function-header {
+        .forum-category-title {
+            background: #2d323c;
+            padding: 14px 20px;
+            font-size: 1.15em;
+            font-weight: 600;
+            color: #e5e7eb;
+            border-bottom: 1px solid #3d434e;
+        }
+
+        .forum-topic {
             display: flex;
             align-items: center;
-            margin-bottom: 15px;
+            padding: 16px 20px;
+            border-bottom: 1px solid #2d323c;
+            text-decoration: none;
+            color: inherit;
+            transition: background 0.2s;
         }
 
-        .function-name {
-            font-family: 'Courier New', monospace;
-            font-size: 1.2em;
-            color: #ff7b72;
-            font-weight: 600;
+        .forum-topic:hover {
+            background: #2d323c;
         }
 
-        .function-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.75em;
-            margin-left: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .badge-init { background: #9e6a03; color: #ffd580; }
-        .badge-event { background: #0969da; color: #79c0ff; }
-        .badge-update { background: #1a7f37; color: #7ee787; }
-        .badge-method { background: #6e7681; color: #e6edf3; }
-
-        .function-description {
-            color: #8b949e;
-            margin-bottom: 15px;
-            line-height: 1.7;
-        }
-
-        /* Блоки кода */
-        .code-block {
-            background: #0d1117;
-            color: #c9d1d9;
-            padding: 20px;
-            border-radius: 6px;
-            overflow-x: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            line-height: 1.5;
-            margin: 15px 0;
-            border: 1px solid #30363d;
-        }
-
-        .code-block .keyword { color: #ff7b72; }
-        .code-block .string { color: #a5d6ff; }
-        .code-block .comment { color: #8b949e; font-style: italic; }
-        .code-block .function { color: #d2a8ff; }
-        .code-block .number { color: #79c0ff; }
-
-        /* Параметры */
-        .params-section {
-            background: #0d1117;
-            border-left: 4px solid #58a6ff;
-            padding: 15px 20px;
-            margin: 15px 0;
-            border-radius: 4px;
-            border: 1px solid #30363d;
-        }
-
-        .params-section h4 {
-            color: #58a6ff;
-            margin-bottom: 10px;
-            font-size: 1em;
-        }
-
-        .param-item {
-            padding: 8px 0;
-            border-bottom: 1px solid #30363d;
-        }
-
-        .param-item:last-child {
+        .forum-topic:last-child {
             border-bottom: none;
         }
 
-        .param-name {
-            font-family: 'Courier New', monospace;
-            color: #ff7b72;
-            font-weight: 600;
+        .topic-icon {
+            width: 40px;
+            height: 40px;
+            background: #3d434e;
+            border-radius: 8px;
+            margin-right: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
         }
 
-        .param-type {
-            color: #8b949e;
+        .topic-info {
+            flex: 1;
+        }
+
+        .topic-title {
+            font-weight: 600;
+            color: #e5e7eb;
+            margin-bottom: 4px;
+        }
+
+        .topic-meta {
+            font-size: 0.85em;
+            color: #6b7280;
+        }
+
+        .topic-stats {
+            text-align: right;
+            font-size: 0.85em;
+            color: #6b7280;
+        }
+
+        /* Пост на форуме */
+        .post {
+            background: #252930;
+            border: 1px solid #3d434e;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .post-sidebar {
+            width: 180px;
+            min-width: 180px;
+            background: #1e2128;
+            padding: 20px;
+            border-right: 1px solid #3d434e;
+            text-align: center;
+        }
+
+        .post-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #3d434e;
+            margin: 0 auto 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            color: #6b7280;
+        }
+
+        .post-username {
+            font-weight: 600;
+            color: #e5e7eb;
+            margin-bottom: 4px;
+        }
+
+        .post-role {
+            font-size: 0.8em;
+            color: #7eb8da;
+            margin-bottom: 12px;
+        }
+
+        .post-date {
+            font-size: 0.8em;
+            color: #6b7280;
+        }
+
+        .post-messages {
+            font-size: 0.8em;
+            color: #6b7280;
+            margin-top: 8px;
+        }
+
+        .post-body {
+            flex: 1;
+            padding: 24px;
+        }
+
+        .post-body h2 {
+            font-size: 1.4em;
+            color: #e5e7eb;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #3d434e;
+        }
+
+        .post-body h3 {
+            font-size: 1.15em;
+            color: #d4d6d9;
+            margin: 20px 0 10px;
+        }
+
+        .post-body p {
+            margin-bottom: 14px;
+            color: #b8bcc4;
+            text-align: justify;
+        }
+
+        .post-signature {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px dashed #3d434e;
             font-size: 0.9em;
+            color: #6b7280;
             font-style: italic;
         }
 
-        /* Информационные блоки */
-        .info-box {
+        /* Блок кода на форуме */
+        .code-section {
+            background: #1a1d23;
+            border: 1px solid #3d434e;
+            border-radius: 8px;
+            margin: 24px 0;
+            overflow: hidden;
+        }
+
+        .code-section-header {
+            background: #2d323c;
+            padding: 12px 20px;
+            font-weight: 600;
+            color: #7eb8da;
+            border-bottom: 1px solid #3d434e;
+            font-family: 'Consolas', monospace;
+        }
+
+        .full-code-block {
             background: #0d1117;
-            border-left: 4px solid #58a6ff;
-            padding: 15px 20px;
+            color: #c9d1d9;
+            padding: 20px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.82em;
+            line-height: 1.5;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre;
+        }
+
+        .forum-divider {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #3d434e, transparent);
+            margin: 32px 0;
+        }
+
+        .forum-page-title {
+            font-size: 1.8em;
+            color: #e5e7eb;
+            margin-bottom: 8px;
+        }
+
+        .forum-page-desc {
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+
+        .info-box {
+            background: #1e2a35;
+            border-left: 4px solid #7eb8da;
+            padding: 16px 20px;
             margin: 20px 0;
             border-radius: 4px;
-            border: 1px solid #30363d;
-            color: #c9d1d9;
+            color: #b8bcc4;
         }
 
-        .info-box.warning {
-            background: #1c1308;
-            border-left-color: #f0883e;
-            border-color: #9e6a03;
+        .announce-sticky {
+            background: #2d323c;
+            border: 1px solid #7eb8da;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
         }
 
-        .info-box.success {
-            background: #0f1c12;
-            border-left-color: #3fb950;
-            border-color: #1a7f37;
+        .announce-sticky .topic-title {
+            color: #7eb8da;
         }
 
-        /* Список возможностей */
-        .features-list {
+        ul.features-list {
             list-style: none;
             padding: 0;
         }
 
         .features-list li {
-            padding: 10px 0;
-            padding-left: 30px;
+            padding: 8px 0 8px 28px;
             position: relative;
-            color: #c9d1d9;
+            color: #b8bcc4;
         }
 
         .features-list li:before {
             content: "✓";
             position: absolute;
             left: 0;
-            color: #3fb950;
+            color: #6ee7b7;
             font-weight: bold;
-            font-size: 1.2em;
-        }
-
-        /* Таблица */
-        .table-wrapper {
-            overflow-x: auto;
-            margin: 20px 0;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-        }
-
-        th {
-            background: #161b22;
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-            border-bottom: 2px solid #30363d;
-            color: #f0f6fc;
-        }
-
-        td {
-            padding: 12px;
-            border-bottom: 1px solid #30363d;
-            color: #c9d1d9;
-        }
-
-        tr:hover {
-            background: #161b22;
         }
 
         code {
-            background: #161b22;
-            color: #ff7b72;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: 'Courier New', monospace;
+            background: #1e2128;
+            color: #7eb8da;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
             font-size: 0.9em;
         }
 
-        /* Адаптивность */
         @media (max-width: 768px) {
-            .sidebar {
+            .post {
+                flex-direction: column;
+            }
+            .post-sidebar {
                 width: 100%;
-                height: auto;
-                position: relative;
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                text-align: left;
             }
-
-            .main-content {
-                margin-left: 0;
-                padding: 20px;
+            .post-avatar {
+                margin: 0;
+                width: 56px;
+                height: 56px;
+                font-size: 1.4em;
             }
-        }
-
-        /* Скроллбар */
-        ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #0d1117;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #30363d;
-            border-radius: 5px;
-            border: 2px solid #0d1117;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #484f58;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Боковое меню -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h1>Robot Control API</h1>
-                <p>Документация v1.0</p>
-            </div>
-            <nav class="nav-menu" id="navMenu">
-                <!-- Меню генерируется динамически -->
-            </nav>
-        </aside>
+    <header class="forum-header">
+        <div class="forum-logo">🤖 Robot Control — Форум</div>
+        <nav class="forum-nav">
+            <a href="#main">Главная</a>
+            <a href="#docs">Документация</a>
+            <a href="#code">Исходный код</a>
+            <a href="#faq">FAQ</a>
+        </nav>
+    </header>
 
-        <!-- Основной контент -->
-        <main class="main-content" id="mainContent">
-            <!-- Контент генерируется динамически -->
-        </main>
+    <div class="breadcrumb">
+        <a href="#">Форум</a> → <a href="#">Robot Control API</a> → Документация и обсуждения
+    </div>
+
+    <div class="container">
+        <h1 class="forum-page-title">Добро пожаловать на форум Robot Control API</h1>
+        <p class="forum-page-desc">Здесь вы найдёте документацию, обсуждения и полный исходный код проекта управления 6-осевым роботом на PyQt5.</p>
+
+        <div class="forum-category">
+            <div class="forum-category-title">📌 Важные объявления и документация</div>
+            <a href="#overview" class="forum-topic">
+                <div class="topic-icon">📄</div>
+                <div class="topic-info">
+                    <div class="topic-title">Обзор проекта и быстрый старт — что это за приложение и с чего начать</div>
+                    <div class="topic-meta">Автор: RobotDev · 15 янв 2025 · 127 просмотров</div>
+                </div>
+                <div class="topic-stats">12 сообщений</div>
+            </a>
+            <a href="#code" class="forum-topic announce-sticky">
+                <div class="topic-icon">💻</div>
+                <div class="topic-info">
+                    <div class="topic-title">Полный исходный код: main.py и ui.py — вся логика и интерфейс в одном месте</div>
+                    <div class="topic-meta">Закреплено · Исходники проекта</div>
+                </div>
+                <div class="topic-stats">1 сообщение</div>
+            </a>
+        </div>
+
+        <div class="forum-category">
+            <div class="forum-category-title">💬 Обсуждения и помощь</div>
+            <a href="#api" class="forum-topic">
+                <div class="topic-icon">🔧</div>
+                <div class="topic-info">
+                    <div class="topic-title">API Reference: класс Ui_Main, методы button_click, change_cords, updates, mot1–mot6</div>
+                    <div class="topic-meta">Автор: RobotDev · 14 янв 2025 · 89 просмотров</div>
+                </div>
+                <div class="topic-stats">8 сообщений</div>
+            </a>
+        </div>
+
+        <!-- Пост 1: Обзор -->
+        <div id="overview" class="post">
+            <div class="post-sidebar">
+                <div class="post-avatar">👤</div>
+                <div class="post-username">RobotDev</div>
+                <div class="post-role">Разработчик</div>
+                <div class="post-date">15 янв 2025, 10:32</div>
+                <div class="post-messages">Сообщений: 42</div>
+            </div>
+            <div class="post-body">
+                <h2>Обзор проекта Robot Control API и быстрый старт</h2>
+                <p>Добрый день всем участникам форума! Решил открыть отдельную тему, в которой кратко (и не очень кратко) расскажу про наш проект — приложение для управления 6-осевым роботом-манипулятором. Многие спрашивают в личку и в других темах: что это за софт, на чём написано, как запустить и с чего начать. Чтобы не повторяться, собрал всё в одном месте. Если после прочтения останутся вопросы — пишите в эту же тему или создавайте новую в разделе «Помощь».</p>
+                <p>Итак, Robot Control API — это десктопное приложение на Python с использованием библиотеки PyQt5. Оно предназначено для управления промышленным (или учебным) 6-осевым роботом через графический интерфейс. То есть вы видите окошко с кнопками, слайдерами, таблицами и индикаторами, а не консоль с командами. Это удобно для операторов и для отладки.</p>
+                <p>Основные возможности приложения включают: управление шестью моторами через интуитивные слайдеры, переключение между режимами отображения координат (градусы суставов J1–J6 или декартовы координаты X, Y, Z, Rx, Ry, Rz), визуальные индикаторы состояния робота (несколько цветов — белый, синий, зелёный, жёлтый, красный в зависимости от режима или ошибки), кнопку «Старт/Стоп» для запуска и остановки работы, таблицу с текущими значениями моторов (температура, тики, радианы, градусы) и автоматическое обновление интерфейса каждые 50 миллисекунд по таймеру, чтобы данные не «залипали».</p>
+                <div class="info-box">
+                    <strong>О проекте:</strong> Приложение на PyQt5 для управления роботом-манипулятором с графическим интерфейсом. Точка входа — файл <code>main.py</code>, интерфейс описан в <code>ui.py</code> (сгенерирован из <code>ui.ui</code> через pyuic5).
+                </div>
+                <h3>Структура класса Ui_Main</h3>
+                <p>Главный класс приложения — <code>Ui_Main</code>. Он наследуется от <code>QMainWindow</code> и от <code>ui.Ui_MainWindow</code>. В нём реализованы конструктор <code>__init__</code>, обработчик кнопки Старт/Стоп <code>button_click</code>, переключение режима координат <code>change_cords</code>, периодическое обновление интерфейса <code>updates</code> и шесть методов для моторов <code>mot1</code>–<code>mot6</code>. Подробное описание каждого метода есть в разделе «API Reference» на форуме.</p>
+                <h3>Быстрый старт</h3>
+                <p>Чтобы запустить приложение, нужен установленный Python 3 и PyQt5. Откройте терминал в папке с проектом и выполните: <code>python main.py</code>. В коде создаётся экземпляр <code>QApplication</code>, главное окно <code>Ui_Main()</code>, вызывается <code>window.show()</code> и затем <code>app.exec()</code> — так запускается цикл обработки событий Qt. Окно появится на экране, и можно пользоваться слайдерами и кнопками. На этом быстрый старт заканчивается; дальше изучайте раздел с исходным кодом и API.</p>
+                <div class="post-signature">— RobotDev. Пишите вопросы в тему или в ЛС. Не забывайте смотреть раздел «Исходный код» — там выложен полный main.py и ui.py.</div>
+            </div>
+        </div>
+
+        <div class="forum-divider"></div>
+
+        <!-- Пост 2: Ответ с ещё водой -->
+        <div class="post">
+            <div class="post-sidebar">
+                <div class="post-avatar">👤</div>
+                <div class="post-username">Новичок_Петя</div>
+                <div class="post-role">Участник</div>
+                <div class="post-date">16 янв 2025, 14:20</div>
+                <div class="post-messages">Сообщений: 5</div>
+            </div>
+            <div class="post-body">
+                <h2>Re: Обзор проекта и быстрый старт</h2>
+                <p>Привет! Спасибо за подробный обзор. Я только начинаю разбираться с роботами и PyQt, поэтому для меня эта тема оказалась очень полезной. Хотел уточнить: у меня Windows 10, Python 3.9 и PyQt5 ставлю через pip. После установки запустил main.py — окно открылось, слайдеры двигаются, кнопка Старт/Стоп переключается. Но не совсем понятно, как именно эти данные уходят на реального робота (если он подключён). То есть это пока только интерфейс без связи с железом, или где-то есть описание протокола? Заранее благодарен за ответ.</p>
+                <p>Ещё вопрос: в интерфейсе есть кнопки «Экстренное торможение», «пауза», «Возвращение на старт», «Начало работы в ручном режиме», «Сохранить состояние системы» и т.д. Они в текущей версии уже привязаны к каким-то действиям или это заготовки на будущее? В документации по API я пока видел только button_click для Старт/Стоп. Буду рад, если кто-то подскажет или даст ссылку на раздел, где это расписано.</p>
+                <div class="post-signature">— Новичок_Петя. Учусь потихоньку.</div>
+            </div>
+        </div>
+
+        <div class="post">
+            <div class="post-sidebar">
+                <div class="post-avatar">👤</div>
+                <div class="post-username">RobotDev</div>
+                <div class="post-role">Разработчик</div>
+                <div class="post-date">16 янв 2025, 18:45</div>
+                <div class="post-messages">Сообщений: 42</div>
+            </div>
+            <div class="post-body">
+                <h2>Re: Обзор проекта и быстрый старт</h2>
+                <p>Новичок_Петя, привет. Рад, что обзор пригодился. По твоим вопросам: в текущей открытой версии приложение действительно в первую очередь демонстрирует интерфейс и логику управления «внутри» программы — то есть значения моторов хранятся в массиве <code>self.motors</code>, отображаются в таблице и обновляются по таймеру. Связь с реальным оборудованием (по COM, Ethernet, Modbus и т.д.) обычно добавляется отдельным слоем: в методах <code>mot1</code>–<code>mot6</code> или в <code>updates</code> можно вызывать функции отправки команд на контроллер робота. Конкретный протокол зависит от производителя; в коде, который выложен на форуме в разделе «Исходный код», этого слоя пока нет — его можно реализовать по мере необходимости.</p>
+                <p>По поводу кнопок «Экстренное торможение», «пауза», «Возвращение на старт» и других: да, часть из них в ui.py только создаётся (виджеты есть), но обработчики в main.py в примере привязаны не ко всем. Сейчас явно обрабатывается только кнопка Старт/Стоп (<code>pushButton_10</code> и метод <code>button_click</code>). Остальные кнопки — заготовки под будущую логику; их можно подключить по аналогии через <code>.clicked.connect(...)</code> в <code>__init__</code>. Когда будет время, могу расписать в отдельной теме, как лучше повесить обработчики на эти кнопки. Если нужно, создай тему в «Помощь» с заголовком типа «Обработчики для кнопок паузы и экстренного торможения» — туда и отвечу.</p>
+                <div class="post-signature">— RobotDev.</div>
+            </div>
+        </div>
+
+        <div class="forum-divider"></div>
+
+        <!-- Секция с полным исходным кодом -->
+        <div id="code" class="forum-category-title" style="margin-top: 32px; margin-bottom: 16px;">💻 Полный исходный код проекта</div>
+        <p style="margin-bottom: 20px; color: #b8bcc4;">Ниже приведён полностью код двух основных файлов: <strong>main.py</strong> (точка входа, классы Log и Ui_Main, запуск приложения) и <strong>ui.py</strong> (сгенерированный PyQt5 UI-модуль с классом Ui_MainWindow и разметкой интерфейса). Можно копировать и использовать в своём проекте.</p>
+
+        <div class="code-section">
+            <div class="code-section-header">main.py — основной файл приложения (C:\Users\user\Desktop\robots\main.py)</div>
+            <pre class="full-code-block" id="main-py-code"></pre>
+        </div>
+<script type="text/plain" id="main-py-raw">
+from PyQt5.QtCore import QTimer
+from datetime import datetime
+import ui
+from PyQt5.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QMainWindow, QFileDialog, QMessageBox
+import math
+import random
+import socket
+import sys
+
+DEFAULT_TCP_PAIRS = [
+    ("192.168.1.1", 502),
+    ("192.168.1.1", 9999),
+    ("192.168.7.2", 9999),
+    ("127.0.0.1", 502),
+    ("127.0.0.1", 9999),
+]
+DEFAULT_SERIAL_PORTS = ["COM3", "COM1", "COM4", "COM2"] if sys.platform == "win32" else ["/dev/ttyUSB0", "/dev/ttyACM0"]
+CONNECT_TIMEOUT = 2.0
+
+
+class RobotAPI:
+    LAMP_OFF = 0
+    LAMP_BLUE = 1
+    LAMP_GREEN = 2
+    LAMP_YELLOW = 3
+    LAMP_RED = 4
+
+    def __init__(self):
+        self._connected = False
+        self._feedback_serial = None
+        self._feedback_socket = None
+        self._joint_positions_deg = [0.0] * 6
+        self._joint_positions_rad = [0.0] * 6
+        self._joint_ticks = [0] * 6
+        self._joint_temperatures = [25.0] * 6
+        self._cartesian_pose = [0.0] * 6
+        self._gripper_open = True
+        self._conveyor_on = False
+        self._lamp_state = self.LAMP_OFF
+        self._last_commanded_deg = [0.0] * 6
+        self._feedback_received = False
+        self._connection_error = None
+        self._feedback_channel_name = None
+    def connect(self, host=None, port=None):
+        self._connected = False
+        self._close_feedback_channel()
+        self._connection_error = None
+        self._feedback_channel_name = None
+        for addr, port_num in DEFAULT_TCP_PAIRS:
+            s = None
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(CONNECT_TIMEOUT)
+                s.connect((addr, port_num))
+                s.settimeout(0.05)
+                self._feedback_socket = s
+                self._connected = True
+                self._feedback_channel_name = f"{addr}:{port_num}"
+                self._lamp_state = self.LAMP_BLUE
+                return True
+            except (socket.timeout, OSError, ConnectionRefusedError):
+                if s:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+            except Exception:
+                if s:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+        for port_name in DEFAULT_SERIAL_PORTS:
+            try:
+                import serial
+                self._feedback_serial = serial.Serial(port_name, 115200, timeout=0.05)
+                self._connected = True
+                self._feedback_channel_name = port_name
+                self._lamp_state = self.LAMP_BLUE
+                return True
+            except Exception:
+                self._feedback_serial = None
+        self._connection_error = None
+        return False
+    def get_connection_error(self):
+        return getattr(self, "_connection_error", None)
+    def get_feedback_channel_name(self):
+        return getattr(self, "_feedback_channel_name", None)
+    def has_feedback_channel(self):
+        return (self._feedback_serial is not None) or (self._feedback_socket is not None)
+    def disconnect(self):
+        self._close_feedback_channel()
+        self._connected = False
+        self._lamp_state = self.LAMP_OFF
+        self._feedback_received = False
+    def _close_feedback_channel(self):
+        if self._feedback_serial:
+            try:
+                self._feedback_serial.close()
+            except Exception:
+                pass
+            self._feedback_serial = None
+        if self._feedback_socket:
+            try:
+                self._feedback_socket.close()
+            except Exception:
+                pass
+            self._feedback_socket = None
+    def is_connected(self):
+        return self._connected
+    def poll_feedback(self):
+        line = None
+        if self._feedback_serial:
+            try:
+                if self._feedback_serial.in_waiting:
+                    line = self._feedback_serial.readline().decode("utf-8", errors="ignore").strip()
+            except Exception:
+                pass
+        elif self._feedback_socket:
+            try:
+                self._feedback_socket.setblocking(False)
+                line = self._feedback_socket.recv(256).decode("utf-8", errors="ignore").strip()
+                if "\n" in line:
+                    line = line.split("\n")[-1]
+            except (BlockingIOError, socket.timeout, OSError):
+                line = None
+            except Exception:
+                line = None
+        if line:
+            parts = line.replace(",", " ").split()
+            if len(parts) >= 12:
+                try:
+                    for i in range(6):
+                        self._joint_positions_deg[i] = float(parts[i])
+                        self._joint_temperatures[i] = float(parts[i + 6])
+                    self._joint_positions_rad = [math.radians(x) for x in self._joint_positions_deg]
+                    self._joint_ticks = [int(x * 100) for x in self._joint_positions_deg]
+                    self._cartesian_pose = self._fk_simple(self._joint_positions_deg)
+                    self._feedback_received = True
+                    return
+                except (ValueError, IndexError):
+                    pass
+    def get_joint_positions_deg(self):
+        if not self._connected or not self._feedback_received:
+            return None
+        return list(self._joint_positions_deg)
+    def get_joint_positions_rad(self):
+        if not self._connected or not self._feedback_received:
+            return None
+        return list(self._joint_positions_rad)
+    def get_joint_ticks(self):
+        if not self._connected or not self._feedback_received:
+            return None
+        return list(self._joint_ticks)
+    def get_joint_temperatures(self):
+        if not self._connected or not self._feedback_received:
+            return None
+        return list(self._joint_temperatures)
+    def get_cartesian_pose(self):
+        if not self._connected or not self._feedback_received:
+            return None
+        return list(self._cartesian_pose)
+    def get_gripper_state(self):
+        return self._gripper_open
+    def get_conveyor_state(self):
+        return self._conveyor_on
+    def set_traffic_light(self, state):
+        self._lamp_state = state
+    def move_joints_deg(self, j1, j2, j3, j4, j5, j6):
+        if not self._connected:
+            return False
+        self._last_commanded_deg = [float(j1), float(j2), float(j3), float(j4), float(j5), float(j6)]
+        if not self._feedback_serial and not self._feedback_socket:
+            self._joint_positions_deg = list(self._last_commanded_deg)
+            self._joint_positions_rad = [math.radians(x) for x in self._joint_positions_deg]
+            self._joint_ticks = [int(x * 100) for x in self._joint_positions_deg]
+            self._cartesian_pose = self._fk_simple(self._joint_positions_deg)
+            self._update_temperatures_from_load()
+        return True
+    def move_cartesian(self, x, y, z, rx, ry, rz):
+        if not self._connected:
+            return False
+        self._cartesian_pose = [float(x), float(y), float(z), float(rx), float(ry), float(rz)]
+        self._last_commanded_deg = [x * 0.1, y * 0.1, z * 0.1, rx, ry, rz]
+        if not self._feedback_serial and not self._feedback_socket:
+            self._joint_positions_deg = list(self._last_commanded_deg)
+            self._joint_positions_rad = [math.radians(a) for a in self._joint_positions_deg]
+            self._joint_ticks = [int(a * 100) for a in self._joint_positions_deg]
+            self._update_temperatures_from_load()
+        return True
+    def set_gripper(self, open_gripper):
+        self._gripper_open = bool(open_gripper)
+    def set_conveyor(self, on):
+        self._conveyor_on = bool(on)
+    def emergency_stop(self):
+        self._lamp_state = self.LAMP_RED
+    def go_home(self):
+        if not self._connected:
+            return False
+        self.move_joints_deg(0, 0, 0, 0, 0, 0)
+        self._lamp_state = self.LAMP_BLUE
+        return True
+    def _fk_simple(self, joints_deg):
+        j = [math.radians(a) for a in joints_deg]
+        x = 300 * (j[0] * 0.5 + j[1] * 0.3 + j[2] * 0.2)
+        y = 300 * (j[1] * 0.3 + j[3] * 0.2)
+        z = 300 * (0.5 + j[2] * 0.2 + j[4] * 0.1)
+        return [x, y, z, joints_deg[3], joints_deg[4], joints_deg[5]]
+    def _update_temperatures_from_load(self):
+        for i in range(6):
+            load = abs(self._joint_positions_deg[i]) / 36.0
+            self._joint_temperatures[i] = 25.0 + load + random.uniform(-0.5, 0.5)
+            self._joint_temperatures[i] = round(self._joint_temperatures[i], 1)
+
+class Log():
+    def __init__(self):
+        self.logs = []
+        self.errors = []
+    def add_logs(self, log_text):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        log_with_time = f"{log_text} {timestamp}"
+        self.logs.append(log_with_time)
+    def add_errors(self, error_text):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        error_with_time = f"{error_text} {timestamp}"
+        self.errors.append(error_with_time)
+        self.logs.append(error_with_time)
+    def get_logs(self):
+        return "\n".join(self.logs)
+    def get_errors(self):
+        return "\n".join(self.errors)
+    def save_to_file(self, filepath):
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(self.get_logs())
+            return True
+        except Exception as e:
+            return False
+
+class Ui_Main(QMainWindow, ui.Ui_MainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setupUi(self)
+        self.turnon = False
+        self.paused = False
+        self.emergency_stop = False
+        self.manual_mode_active = False
+        self.robot_connected = False
+        self.color = 0
+        self.api = RobotAPI()
+        self.motors = [0, 0, 0, 0, 0, 0]
+        self.gripper_state = False
+        self.conveyor_state = False
+        self.sorting_stats = {
+            'красный': {'count': 0, 'last_time': ''},
+            'зеленый': {'count': 0, 'last_time': ''},
+            'синий': {'count': 0, 'last_time': ''},
+            'Брак': {'count': 0, 'last_time': ''}
+        }
+        self.log = Log()
+        self.pushButton_10.clicked.connect(self.button_start_stop)
+        self.pushButton.clicked.connect(self.button_pause)
+        self.pushButton_2.clicked.connect(self.button_emergency_stop)
+        self.pushButton_3.clicked.connect(self.button_return_to_start)
+        self.pushButton_4.clicked.connect(self.button_manual_mode)
+        self.pushButton_5.clicked.connect(self.save_logs)
+        self.pushButton_6.clicked.connect(lambda: self.add_to_stats('красный'))
+        self.pushButton_7.clicked.connect(lambda: self.add_to_stats('зеленый'))
+        self.pushButton_8.clicked.connect(lambda: self.add_to_stats('синий'))
+        self.pushButton_9.clicked.connect(lambda: self.add_to_stats('Брак'))
+        self.comboBox.currentTextChanged.connect(self.change_cords)
+        self.horizontalSlider.valueChanged.connect(self.mot1)
+        self.horizontalSlider_2.valueChanged.connect(self.mot2)
+        self.horizontalSlider_3.valueChanged.connect(self.mot3)
+        self.horizontalSlider_4.valueChanged.connect(self.mot4)
+        self.horizontalSlider_5.valueChanged.connect(self.mot5)
+        self.horizontalSlider_6.valueChanged.connect(self.mot6)
+        self.checkBox.stateChanged.connect(self.toggle_gripper)
+        self.checkBox_2.stateChanged.connect(self.toggle_conveyor)
+        self.set_sliders_enabled(False)
+
+        for slider in [self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
+                      self.horizontalSlider_4, self.horizontalSlider_5, self.horizontalSlider_6]:
+            slider.setMinimum(-180)
+            slider.setMaximum(180)
+            slider.setValue(0)
+        self.init_tables()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.updates)
+        self.timer.start(50)
+    def init_tables(self):
+        for i in range(6):
+            self.tableWidget.setItem(i, 0, QTableWidgetItem("25"))
+            self.tableWidget.setItem(i, 1, QTableWidgetItem("0"))
+            self.tableWidget.setItem(i, 2, QTableWidgetItem("0.00"))
+            self.tableWidget.setItem(i, 3, QTableWidgetItem("0"))
+        stats_order = ['красный', 'зеленый', 'синий', 'Брак']
+        for i, category in enumerate(stats_order):
+            self.tableWidget_2.setItem(i, 0, QTableWidgetItem("0"))
+            self.tableWidget_2.setItem(i, 1, QTableWidgetItem(""))
+    def set_sliders_enabled(self, enabled):
+        for slider in [self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
+                      self.horizontalSlider_4, self.horizontalSlider_5, self.horizontalSlider_6]:
+            slider.setEnabled(enabled)
+    def check_robot_connection(self):
+        self.log.add_logs("проверка подключения к роботу...")
+        self.update_logs_display()
+        self.robot_connected = self.api.connect()
+        if self.robot_connected:
+            ch = self.api.get_feedback_channel_name()
+            self.log.add_logs(f"робот подключен ({ch})")
+            self.log.add_logs("датчики моторов: подключены")
+        else:
+            self.log.add_errors("робот не подключен")
+            self.log.add_errors("датчики моторов: недоступны")
+        return self.robot_connected
+    def button_start_stop(self):
+        self.turnon = not self.turnon
+        if self.turnon:
+            self.check_robot_connection()
+            self.pushButton_10.setText("Стоп")
+            self.color = 1
+            self.emergency_stop = False
+            self.paused = False
+            self.log.add_logs("робот включен")
+            if self.robot_connected:
+                self.log.add_logs("робот на стартовой позиции")
+            else:
+                self.log.add_logs("режим без робота")
+        else:
+            self.pushButton_10.setText("Старт")
+            self.color = 0
+            self.manual_mode_active = False
+            self.set_sliders_enabled(False)
+            self.conveyor_state = False
+            self.checkBox_2.setChecked(False)
+            try:
+                self.api.disconnect()
+            except Exception:
+                pass
+            self.robot_connected = False
+            self.pushButton_4.setText("начало работы в ручном режиме управления")
+            self.log.add_logs("робот выключен")
+            for i in range(6):
+                self.motors[i] = 0
+        self.update_logs_display()
+    def button_pause(self):
+        if not self.turnon:
+            return
+        if self.emergency_stop:
+            return
+        self.paused = not self.paused
+        if self.paused:
+            self.pushButton.setText("продолжить")
+            self.color = 3
+            self.log.add_logs("пауза")
+        else:
+            self.pushButton.setText("пауза")
+            self.color = 2
+            self.log.add_logs("возобновление работы")
+        self.update_logs_display()
+    def button_emergency_stop(self):
+        if not self.turnon:
+            return
+        try:
+            self.api.emergency_stop()
+        except Exception:
+            pass
+        self.emergency_stop = True
+        self.paused = False
+        self.color = 4
+        self.conveyor_state = False
+        self.checkBox_2.setChecked(False)
+        self.manual_mode_active = False
+        self.set_sliders_enabled(False)
+        self.pushButton_4.setText("начало работы в ручном режиме управления")
+        self.pushButton.setText("пауза")
+        self.log.add_logs("аварийная остановка системы")
+        self.update_logs_display()
+    def button_return_to_start(self):
+        if not self.turnon:
+            return
+        try:
+            self.api.go_home()
+        except Exception:
+            pass
+        self.color = 1
+        self.paused = False
+        self.emergency_stop = False
+        self.pushButton.setText("пауза")
+        for i in range(6):
+            self.motors[i] = 0
+        sliders = [self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
+                   self.horizontalSlider_4, self.horizontalSlider_5, self.horizontalSlider_6]
+        for s in sliders:
+            s.blockSignals(True)
+            s.setValue(0)
+            s.blockSignals(False)
+        self.log.add_logs("робот возвращается на стартовую позицию")
+        self.log.add_logs("робот на стартовой позиции")
+        self.update_logs_display()
+    def button_manual_mode(self):
+        if not self.turnon or self.emergency_stop:
+            return
+        self.manual_mode_active = not self.manual_mode_active
+        if self.manual_mode_active:
+            self.pushButton_4.setText("остановить ручной режим")
+            self.set_sliders_enabled(True)
+            self.color = 2  # Зелёный - в работе
+            self.log.add_logs("робот в режиме ручного управления")
+        else:
+            self.pushButton_4.setText("начало работы в ручном режиме управления")
+            self.set_sliders_enabled(False)
+            self.color = 1  # Синий - ожидание
+            self.log.add_logs("ручной режим управления отключен")
+        self.update_logs_display()
+    def toggle_gripper(self, state):
+        self.gripper_state = state == 2
+        try:
+            self.api.set_gripper(not self.gripper_state)
+        except Exception:
+            pass
+        status = "закрыт" if self.gripper_state else "открыт"
+        self.log.add_logs(f"Захват {status}")
+        self.update_logs_display()
+    def toggle_conveyor(self, state):
+        if not self.turnon or self.emergency_stop:
+            self.checkBox_2.setChecked(False)
+            return
+        self.conveyor_state = state == 2
+        try:
+            self.api.set_conveyor(self.conveyor_state)
+        except Exception:
+            pass
+        status = "включен" if self.conveyor_state else "выключен"
+        self.log.add_logs(f"конвейер {status}")
+        self.update_logs_display()
+    def add_to_stats(self, category):
+        self.sorting_stats[category]['count'] += 1
+        self.sorting_stats[category]['last_time'] = datetime.now().strftime("%H:%M:%S")
+        stats_order = ['красный', 'зеленый', 'синий', 'Брак']
+        row = stats_order.index(category)
+        self.tableWidget_2.setItem(row, 0, QTableWidgetItem(str(self.sorting_stats[category]['count'])))
+        self.tableWidget_2.setItem(row, 1, QTableWidgetItem(self.sorting_stats[category]['last_time']))
+        if self.manual_mode_active:
+            coords = self.get_current_coordinates()
+            self.log.add_logs(f"текущая координата рабочего инструмента: {coords} при перемещении объекта")
+        self.update_logs_display()
+    def get_current_coordinates(self):
+        if not self.robot_connected:
+            return "(нет связи)"
+        if self.comboBox.currentText() == "по градусам":
+            j = self.api.get_joint_positions_deg()
+            if j is None:
+                return "(нет данных)"
+            return f"(J1:{j[0]:.1f}, J2:{j[1]:.1f}, J3:{j[2]:.1f}, J4:{j[3]:.1f}, J5:{j[4]:.1f}, J6:{j[5]:.1f})"
+        p = self.api.get_cartesian_pose()
+        if p is None:
+            return "(нет данных)"
+        return f"(X:{p[0]:.1f}, Y:{p[1]:.1f}, Z:{p[2]:.1f}, Rx:{p[3]:.1f}, Ry:{p[4]:.1f}, Rz:{p[5]:.1f})"
+    def save_logs(self):
+        options = QFileDialog.Options()
+        filepath, _ = QFileDialog.getSaveFileName(self, "сохранить логи", "",
+                                                  "Text Files (*.txt);;All Files (*)", 
+                                                  options=options)
+        if filepath:
+            if self.log.save_to_file(filepath):
+                QMessageBox.information(self, "успешно", f"логи успешно сохранены в {filepath}")
+            else:
+                QMessageBox.critical(self, "ошибка", "не удалось сохранить файл")
+
+    def update_logs_display(self):
+        self.textBrowser.setPlainText(self.log.get_logs())
+        self.textBrowser.verticalScrollBar().setValue(
+            self.textBrowser.verticalScrollBar().maximum()
+        )
+    def change_cords(self, s):
+        if s == "по градусам":
+            self.label.setText("J1")
+            self.label_2.setText("J2")
+            self.label_3.setText("J3")
+            self.label_4.setText("J4")
+            self.label_5.setText("J5")
+            self.label_6.setText("J6")
+        elif s == "по координатам":
+            self.label.setText("X")
+            self.label_2.setText("Y")
+            self.label_3.setText("Z")
+            self.label_4.setText("Rx")
+            self.label_5.setText("Ry")
+            self.label_6.setText("Rz")
+    def updates(self):
+        try:
+            self.api.poll_feedback()
+        except Exception:
+            pass
+        try:
+            self.api.set_traffic_light(self.color)
+        except Exception:
+            pass
+        if self.color == 0:
+            self.label_8.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_9.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_10.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_11.setStyleSheet("background-color: white; border: 1px solid black;")
+        elif self.color == 1:
+            self.label_8.setStyleSheet("background-color: blue; border: 1px solid black;")
+            self.label_9.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_10.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_11.setStyleSheet("background-color: white; border: 1px solid black;")
+        elif self.color == 2:
+            self.label_8.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_9.setStyleSheet("background-color: green; border: 1px solid black;")
+            self.label_10.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_11.setStyleSheet("background-color: white; border: 1px solid black;")
+        elif self.color == 3:
+            self.label_8.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_9.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_10.setStyleSheet("background-color: yellow; border: 1px solid black;")
+            self.label_11.setStyleSheet("background-color: white; border: 1px solid black;")
+        elif self.color == 4:
+            self.label_8.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_9.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_10.setStyleSheet("background-color: white; border: 1px solid black;")
+            self.label_11.setStyleSheet("background-color: red; border: 1px solid black;")
+
+        temps = self.api.get_joint_temperatures() if self.robot_connected else None
+        ticks = self.api.get_joint_ticks() if self.robot_connected else None
+        rad = self.api.get_joint_positions_rad() if self.robot_connected else None
+        deg = self.api.get_joint_positions_deg() if self.robot_connected else None
+        sliders = [self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
+                   self.horizontalSlider_4, self.horizontalSlider_5, self.horizontalSlider_6]
+        for i in range(6):
+            if self.robot_connected and temps is not None:
+                self.tableWidget.setItem(i, 0, QTableWidgetItem(f"{temps[i]:.1f}"))
+            else:
+                self.tableWidget.setItem(i, 0, QTableWidgetItem("-"))
+            if self.robot_connected and ticks is not None:
+                self.tableWidget.setItem(i, 1, QTableWidgetItem(str(int(ticks[i]))))
+            else:
+                self.tableWidget.setItem(i, 1, QTableWidgetItem("-"))
+            if self.robot_connected and rad is not None:
+                self.tableWidget.setItem(i, 2, QTableWidgetItem(f"{rad[i]:.2f}"))
+            else:
+                self.tableWidget.setItem(i, 2, QTableWidgetItem("-"))
+            if self.robot_connected and deg is not None:
+                self.tableWidget.setItem(i, 3, QTableWidgetItem(f"{deg[i]:.1f}"))
+                if self.manual_mode_active and self.comboBox.currentText() == "по градусам":
+                    s = sliders[i]
+                    v = max(-180, min(180, int(round(deg[i]))))
+                    if s.value() != v:
+                        s.blockSignals(True)
+                        s.setValue(v)
+                        s.blockSignals(False)
+                        self.motors[i] = deg[i]
+            else:
+                self.tableWidget.setItem(i, 3, QTableWidgetItem("-"))
+    def _send_manual_target(self):
+        if not self.robot_connected or not self.manual_mode_active or self.paused or self.emergency_stop:
+            return
+        try:
+            if self.comboBox.currentText() == "по градусам":
+                self.api.move_joints_deg(
+                    self.motors[0], self.motors[1], self.motors[2],
+                    self.motors[3], self.motors[4], self.motors[5]
+                )
+            else:
+                self.api.move_cartesian(
+                    self.motors[0], self.motors[1], self.motors[2],
+                    self.motors[3], self.motors[4], self.motors[5]
+                )
+        except Exception:
+            pass
+    def mot1(self, p):
+        if self.manual_mode_active and not self.paused and not self.emergency_stop:
+            self.motors[0] = p
+            self._send_manual_target()
+    def mot2(self, p):
+        if self.manual_mode_active and not self.paused and not self.emergency_stop:
+            self.motors[1] = p
+            self._send_manual_target()
+    def mot3(self, p):
+        if self.manual_mode_active and not self.paused and not self.emergency_stop:
+            self.motors[2] = p
+            self._send_manual_target()
+    def mot4(self, p):
+        if self.manual_mode_active and not self.paused and not self.emergency_stop:
+            self.motors[3] = p
+            self._send_manual_target()
+    def mot5(self, p):
+        if self.manual_mode_active and not self.paused and not self.emergency_stop:
+            self.motors[4] = p
+            self._send_manual_target()
+    def mot6(self, p):
+        if self.manual_mode_active and not self.paused and not self.emergency_stop:
+            self.motors[5] = p
+            self._send_manual_target()
+app = QApplication([])
+window = Ui_Main()
+window.show()
+app.exec()
+    </script>
+        <div class="code-section">
+            <div class="code-section-header">ui.py — интерфейс (C:\Users\user\PycharmProjects\robots\ui.py)</div>
+            <pre class="full-code-block" id="ui-py-code"></pre>
+        </div>
+
+        <div class="forum-divider"></div>
+
+        <!-- Ещё один длинный пост про API -->
+        <div id="api" class="post">
+            <div class="post-sidebar">
+                <div class="post-avatar">👤</div>
+                <div class="post-username">RobotDev</div>
+                <div class="post-role">Разработчик</div>
+                <div class="post-date">14 янв 2025, 09:15</div>
+                <div class="post-messages">Сообщений: 42</div>
+            </div>
+            <div class="post-body">
+                <h2>API Reference: класс Ui_Main и методы управления</h2>
+                <p>В этой теме кратко опишу класс <code>Ui_Main</code> и его методы — для тех, кто хочет расширять приложение или интегрировать его с другим кодом. Класс наследуется от <code>QMainWindow</code> и <code>ui.Ui_MainWindow</code>. В конструкторе <code>__init__</code> инициализируются флаг <code>turnon</code> (робот включён/выключен), переменная <code>color</code> (индикатор состояния 0–4), массив <code>motors</code> из шести значений, вызывается <code>setupUi(self)</code>, подключаются сигналы: кнопка Старт/Стоп — к <code>button_click</code>, комбобокс — к <code>change_cords</code>, таймер раз в 50 мс — к <code>updates</code>, каждый из шести слайдеров — к <code>mot1</code>–<code>mot6</code> соответственно.</p>
+                <p>Метод <code>button_click</code> инвертирует <code>self.turnon</code> и в зависимости от состояния меняет текст кнопки на «Стоп» или «Старт» и выставляет <code>color</code> 1 или 0. Метод <code>change_cords(self, s)</code> по строке <code>s</code> (текст из комбобокса) переключает подписи осей: либо J1–J6 (по градусам), либо X, Y, Z, Rx, Ry, Rz (по координатам). Метод <code>updates</code> вызывается таймером каждые 50 мс: он обновляет стили четырёх индикаторов (label_8–label_11) в зависимости от <code>color</code> (0 — все белые, 1 — синий первый, 2 — зелёный второй, 3 — жёлтый третий, 4 — красный четвёртый) и записывает значения <code>self.motors[0]</code>–<code>self.motors[5]</code> в четвёртую колонку таблицы <code>tableWidget</code>. Методы <code>mot1</code>–<code>mot6</code> принимают один аргумент <code>p</code> (значение слайдера) и записывают его в <code>self.motors[0]</code>–<code>self.motors[5]</code> соответственно. На этом описание основного API заканчивается; полный код смотрите в разделе «Исходный код» выше.</p>
+                <div class="post-signature">— RobotDev. При необходимости могу вынести это в отдельную страницу «Документация».</div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // Структура документации - легко добавлять новые секции
-        const documentation = {
-            overview: {
-                title: "Обзор",
-                icon: "",
-                category: "Начало работы",
-                content: `
-                    <h1>Документация Robot Control API</h1>
-                    <p style="font-size: 1.1em; color: #7f8c8d; margin-bottom: 30px;">
-                        Полное руководство по использованию API для управления 6-осевым роботом
-                    </p>
-
-                    <div class="info-box">
-                        <strong>О проекте:</strong> Приложение на PyQt5 для управления роботом-манипулятором с графическим интерфейсом.
-                    </div>
-
-                    <h2>Основные возможности</h2>
-                    <ul class="features-list">
-                        <li>Управление 6 моторами через интуитивный интерфейс</li>
-                        <li>Переключение между режимами координат (градусы/декартовы)</li>
-                        <li>Визуальные индикаторы состояния робота</li>
-                        <li>Кнопка Старт/Стоп для управления работой</li>
-                        <li>Таблица с отображением текущих значений моторов</li>
-                        <li>Автоматическое обновление интерфейса каждые 50 мс</li>
-                    </ul>
-
-                    <h2>Структура класса</h2>
-                    <div class="function-card">
-                        <div class="code-block">
-<span class="keyword">class</span> <span class="function">Ui_Main</span>(QMainWindow, ui.Ui_MainWindow):
-    <span class="comment"># Главный класс приложения</span>
-    <span class="keyword">def</span> <span class="function">__init__</span>(self): ...
-    <span class="keyword">def</span> <span class="function">button_click</span>(self): ...
-    <span class="keyword">def</span> <span class="function">change_cords</span>(self, s): ...
-    <span class="keyword">def</span> <span class="function">updates</span>(self): ...
-    <span class="keyword">def</span> <span class="function">mot1-6</span>(self, p): ...
-                        </div>
-                    </div>
-
-                    <h2>Быстрый старт</h2>
-                    <div class="code-block">
-<span class="keyword">from</span> PyQt5.QtWidgets <span class="keyword">import</span> QApplication
-
-<span class="comment"># Создание приложения</span>
-app = QApplication([])
-
-<span class="comment"># Создание окна</span>
-window = Ui_Main()
-window.show()
-
-<span class="comment"># Запуск</span>
-app.exec()
-                    </div>
-                `
-            },
-
-            class_main: {
-                title: "Класс Ui_Main",
-                icon: "",
-                category: "API Reference",
-                content: `
-                    <h1>Класс Ui_Main</h1>
-                    
-                    <div class="function-card">
-                        <div class="function-header">
-                            <span class="function-name">class Ui_Main(QMainWindow, ui.Ui_MainWindow)</span>
-                        </div>
-                        <div class="function-description">
-                            Главный класс приложения, который наследуется от QMainWindow и ui.Ui_MainWindow. 
-                            Отвечает за создание графического интерфейса управления роботом с 6 моторами.
-                        </div>
-
-                        <div class="params-section">
-                            <h4>Наследование:</h4>
-                            <div class="param-item">
-                                <span class="param-name">QMainWindow</span> - базовый класс главного окна Qt
-                            </div>
-                            <div class="param-item">
-                                <span class="param-name">ui.Ui_MainWindow</span> - сгенерированный UI класс
-                            </div>
-                        </div>
-
-                        <div class="params-section">
-                            <h4>Атрибуты класса:</h4>
-                            <div class="param-item">
-                                <span class="param-name">turnon</span> <span class="param-type">(bool)</span> - флаг состояния работы робота
-                            </div>
-                            <div class="param-item">
-                                <span class="param-name">color</span> <span class="param-type">(int)</span> - индикатор текущего состояния (0-4)
-                            </div>
-                            <div class="param-item">
-                                <span class="param-name">motors</span> <span class="param-type">(list)</span> - массив значений для 6 моторов
-                            </div>
-                            <div class="param-item">
-                                <span class="param-name">timer</span> <span class="param-type">(QTimer)</span> - таймер обновления интерфейса
-                            </div>
-                        </div>
-                    </div>
-                `
-            },
-
-            init_method: {
-                title: "__init__",
-                icon: "",
-                category: "API Reference",
-                content: `
-                    <h1>Метод __init__</h1>
-                    
-                    <div class="function-card">
-                        <div class="function-header">
-                            <span class="function-name">def __init__(self)</span>
-                            <span class="function-badge badge-init">Инициализация</span>
-                        </div>
-                        <div class="function-description">
-                            Конструктор класса, который инициализирует все компоненты интерфейса и настраивает начальное состояние приложения.
-                        </div>
-
-                        <h3>Инициализируемые переменные</h3>
-                        <div class="params-section">
-                            <div class="param-item">
-                                <span class="param-name">self.turnon</span> = <span class="number">False</span>
-                                <p style="margin-top: 5px; color: #7f8c8d;">Флаг состояния работы робота (включен/выключен)</p>
-                            </div>
-                            <div class="param-item">
-                                <span class="param-name">self.color</span> = <span class="number">0</span>
-                                <p style="margin-top: 5px; color: #7f8c8d;">Индикатор текущего состояния (0-4)</p>
-                            </div>
-                            <div class="param-item">
-                                <span class="param-name">self.motors</span> = [0, 0, 0, 0, 0, 0]
-                                <p style="margin-top: 5px; color: #7f8c8d;">Массив значений для 6 моторов</p>
-                            </div>
-                        </div>
-
-                        <h3>Подключаемые события</h3>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Компонент</th>
-                                        <th>Событие</th>
-                                        <th>Обработчик</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><code>pushButton_10</code></td>
-                                        <td>clicked</td>
-                                        <td><code>button_click()</code></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>comboBox</code></td>
-                                        <td>currentTextChanged</td>
-                                        <td><code>change_cords()</code></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>horizontalSlider (1-6)</code></td>
-                                        <td>valueChanged</td>
-                                        <td><code>mot1-6()</code></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>timer</code></td>
-                                        <td>timeout (50ms)</td>
-                                        <td><code>updates()</code></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <h3>Полный код метода</h3>
-                        <div class="code-block">
-<span class="keyword">def</span> <span class="function">__init__</span>(self):
-    <span class="function">super</span>().__init__()
-    self.turnon = <span class="keyword">False</span>
-    self.color = <span class="number">0</span>
-    self.motors = [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]
-    self.setupUi(self)
-    self.pushButton_10.clicked.connect(self.button_click)
-    self.comboBox.currentTextChanged.connect(self.change_cords)
-    self.timer = QTimer(self)
-    self.timer.timeout.connect(self.updates)
-    self.timer.start(<span class="number">50</span>)
-    self.horizontalSlider.valueChanged.connect(self.mot1)
-    self.horizontalSlider_2.valueChanged.connect(self.mot2)
-    self.horizontalSlider_3.valueChanged.connect(self.mot3)
-    self.horizontalSlider_4.valueChanged.connect(self.mot4)
-    self.horizontalSlider_5.valueChanged.connect(self.mot5)
-    self.horizontalSlider_6.valueChanged.connect(self.mot6)
-                        </div>
-                    </div>
-                `
-            },
-
-            button_click: {
-                title: "button_click",
-                icon: "",
-                category: "API Reference",
-                content: `
-                    <h1>Метод button_click</h1>
-                    
-                    <div class="function-card">
-                        <div class="function-header">
-                            <span class="function-name">def button_click(self)</span>
-                            <span class="function-badge badge-event">Обработчик события</span>
-                        </div>
-                        <div class="function-description">
-                            Обрабатывает нажатие кнопки Старт/Стоп. Переключает состояние работы робота между включенным и выключенным режимами.
-                        </div>
-
-                        <h3>Логика работы</h3>
-                        <div class="info-box">
-                            <p>Метод инвертирует значение <code>self.turnon</code> и обновляет визуальное состояние кнопки и индикаторов.</p>
-                        </div>
-
-                        <div class="params-section">
-                            <h4>Состояния:</h4>
-                            <div class="param-item">
-                                <strong>Включено (turnon = True):</strong>
-                                <ul style="margin-top: 5px;">
-                                    <li>Текст кнопки → "Стоп"</li>
-                                    <li>Индикатор → синий (color = 1)</li>
-                                </ul>
-                            </div>
-                            <div class="param-item">
-                                <strong>Выключено (turnon = False):</strong>
-                                <ul style="margin-top: 5px;">
-                                    <li>Текст кнопки → "Старт"</li>
-                                    <li>Индикатор → белый (color = 0)</li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <h3>Полный код метода</h3>
-                        <div class="code-block">
-<span class="keyword">def</span> <span class="function">button_click</span>(self):
-    self.turnon = <span class="keyword">not</span> self.turnon
-    <span class="keyword">if</span> self.turnon:
-        self.pushButton_10.setText(<span class="string">"Стоп"</span>)
-        self.color = <span class="number">1</span>
-    <span class="keyword">else</span>:
-        self.pushButton_10.setText(<span class="string">"Старт"</span>)
-        self.color = <span class="number">0</span>
-                        </div>
-
-                        <h3>Использование</h3>
-                        <div class="code-block">
-<span class="comment"># Подключение в __init__</span>
-self.pushButton_10.clicked.connect(self.button_click)
-                        </div>
-                    </div>
-                `
-            },
-
-            change_cords: {
-                title: "change_cords",
-                icon: "",
-                category: "API Reference",
-                content: `
-                    <h1>Метод change_cords</h1>
-                    
-                    <div class="function-card">
-                        <div class="function-header">
-                            <span class="function-name">def change_cords(self, s)</span>
-                            <span class="function-badge badge-event">Обработчик события</span>
-                        </div>
-                        <div class="function-description">
-                            Переключает режим отображения координат между градусами (углами суставов) и декартовыми координатами.
-                        </div>
-
-                        <h3>Параметры</h3>
-                        <div class="params-section">
-                            <div class="param-item">
-                                <span class="param-name">s</span> <span class="param-type">(str)</span>
-                                <p style="margin-top: 5px; color: #7f8c8d;">Выбранный текст из ComboBox</p>
-                            </div>
-                        </div>
-
-                        <h3>Режимы отображения</h3>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Режим</th>
-                                        <th>Метки осей</th>
-                                        <th>Описание</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><strong>"по градусам"</strong></td>
-                                        <td>J1, J2, J3, J4, J5, J6</td>
-                                        <td>Углы суставов робота в градусах</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>"по координатам"</strong></td>
-                                        <td>X, Y, Z, Rx, Ry, Rz</td>
-                                        <td>Позиция и ориентация в декартовом пространстве</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <h3>Полный код метода</h3>
-                        <div class="code-block">
-<span class="keyword">def</span> <span class="function">change_cords</span>(self, s):
-    <span class="keyword">if</span> s == <span class="string">"по градусам"</span>:
-        self.label.setText(<span class="string">"J1"</span>)
-        self.label_2.setText(<span class="string">"J2"</span>)
-        self.label_3.setText(<span class="string">"J3"</span>)
-        self.label_4.setText(<span class="string">"J4"</span>)
-        self.label_5.setText(<span class="string">"J5"</span>)
-        self.label_6.setText(<span class="string">"J6"</span>)
-    <span class="keyword">elif</span> s == <span class="string">"по координатам"</span>:
-        self.label.setText(<span class="string">"X"</span>)
-        self.label_2.setText(<span class="string">"Y"</span>)
-        self.label_3.setText(<span class="string">"Z"</span>)
-        self.label_4.setText(<span class="string">"Rx"</span>)
-        self.label_5.setText(<span class="string">"Ry"</span>)
-        self.label_6.setText(<span class="string">"Rz"</span>)
-                        </div>
-                    </div>
-                `
-            },
-
-            updates: {
-                title: "updates",
-                icon: "",
-                category: "API Reference",
-                content: `
-                    <h1>Метод updates</h1>
-                    
-                    <div class="function-card">
-                        <div class="function-header">
-                            <span class="function-name">def updates(self)</span>
-                            <span class="function-badge badge-update">Обновление</span>
-                        </div>
-                        <div class="function-description">
-                            Вызывается таймером каждые 50 мс. Обновляет визуальные индикаторы состояния и таблицу с данными моторов.
-                        </div>
-
-                        <div class="info-box warning">
-                            <strong> Важно:</strong> Метод вызывается автоматически таймером. Частота обновления: 20 раз в секунду (50 мс).
-                        </div>
-
-                        <h3>Цветовые индикаторы состояния</h3>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Значение color</th>
-                                        <th>Цвет индикатора</th>
-                                        <th>Состояние</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><code>0</code></td>
-                                        <td> Белый (все)</td>
-                                        <td>Робот остановлен</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>1</code></td>
-                                        <td> Синий (label_8)</td>
-                                        <td>Робот работает</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>2</code></td>
-                                        <td> Зелёный (label_9)</td>
-                                        <td>Состояние 2</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>3</code></td>
-                                        <td> Жёлтый (label_10)</td>
-                                        <td>Состояние 3</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>4</code></td>
-                                        <td> Красный (label_11)</td>
-                                        <td>Ошибка/Предупреждение</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <h3>Обновление таблицы</h3>
-                        <div class="params-section">
-                            <div class="param-item">
-                                Для каждого из 6 моторов обновляет значение в 4-й колонке таблицы (<code>tableWidget</code>)
-                            </div>
-                        </div>
-
-                        <h3>Полный код метода</h3>
-                        <div class="code-block">
-<span class="keyword">def</span> <span class="function">updates</span>(self):
-    <span class="keyword">if</span> self.color == <span class="number">0</span>:
-        self.label_8.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_9.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_10.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_11.setStyleSheet(<span class="string">"background-color : white;"</span>)
-    <span class="keyword">elif</span> self.color == <span class="number">1</span>:
-        self.label_8.setStyleSheet(<span class="string">"background-color : blue;"</span>)
-        self.label_9.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_10.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_11.setStyleSheet(<span class="string">"background-color : white;"</span>)
-    <span class="keyword">elif</span> self.color == <span class="number">2</span>:
-        self.label_8.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_9.setStyleSheet(<span class="string">"background-color : green;"</span>)
-        self.label_10.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_11.setStyleSheet(<span class="string">"background-color : white;"</span>)
-    <span class="keyword">elif</span> self.color == <span class="number">3</span>:
-        self.label_8.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_9.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_10.setStyleSheet(<span class="string">"background-color : yellow;"</span>)
-        self.label_11.setStyleSheet(<span class="string">"background-color : white;"</span>)
-    <span class="keyword">elif</span> self.color == <span class="number">4</span>:
-        self.label_8.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_9.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_10.setStyleSheet(<span class="string">"background-color : white;"</span>)
-        self.label_11.setStyleSheet(<span class="string">"background-color : red;"</span>)
-
-    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="function">range</span>(<span class="number">6</span>):
-        self.tableWidget.setItem(i, <span class="number">3</span>, QTableWidgetItem(<span class="function">str</span>(self.motors[i])))
-                        </div>
-                    </div>
-                `
-            },
-
-            motors: {
-                title: "mot1-mot6",
-                icon: "",
-                category: "API Reference",
-                content: `
-                    <h1>Методы управления моторами</h1>
-                    
-                    <div class="function-card">
-                        <div class="function-header">
-                            <span class="function-name">def mot1(self, p) ... def mot6(self, p)</span>
-                            <span class="function-badge badge-method">Контроллеры</span>
-                        </div>
-                        <div class="function-description">
-                            Шесть идентичных методов для управления каждым из 6 моторов робота. 
-                            Каждый метод привязан к соответствующему слайдеру в интерфейсе.
-                        </div>
-
-                        <h3>Параметры</h3>
-                        <div class="params-section">
-                            <div class="param-item">
-                                <span class="param-name">p</span> <span class="param-type">(int)</span>
-                                <p style="margin-top: 5px; color: #7f8c8d;">Новое значение позиции мотора, полученное от слайдера</p>
-                            </div>
-                        </div>
-
-                        <h3>Список методов</h3>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Метод</th>
-                                        <th>Индекс массива</th>
-                                        <th>Слайдер</th>
-                                        <th>Описание</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><code>mot1(p)</code></td>
-                                        <td>motors[0]</td>
-                                        <td>horizontalSlider</td>
-                                        <td>Первый мотор</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>mot2(p)</code></td>
-                                        <td>motors[1]</td>
-                                        <td>horizontalSlider_2</td>
-                                        <td>Второй мотор</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>mot3(p)</code></td>
-                                        <td>motors[2]</td>
-                                        <td>horizontalSlider_3</td>
-                                        <td>Третий мотор</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>mot4(p)</code></td>
-                                        <td>motors[3]</td>
-                                        <td>horizontalSlider_4</td>
-                                        <td>Четвёртый мотор</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>mot5(p)</code></td>
-                                        <td>motors[4]</td>
-                                        <td>horizontalSlider_5</td>
-                                        <td>Пятый мотор</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>mot6(p)</code></td>
-                                        <td>motors[5]</td>
-                                        <td>horizontalSlider_6</td>
-                                        <td>Шестой мотор</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <h3>Полный код всех методов</h3>
-                        <div class="code-block">
-<span class="keyword">def</span> <span class="function">mot1</span>(self, p):
-    self.motors[<span class="number">0</span>] = p
-
-<span class="keyword">def</span> <span class="function">mot2</span>(self, p):
-    self.motors[<span class="number">1</span>] = p
-
-<span class="keyword">def</span> <span class="function">mot3</span>(self, p):
-    self.motors[<span class="number">2</span>] = p
-
-<span class="keyword">def</span> <span class="function">mot4</span>(self, p):
-    self.motors[<span class="number">3</span>] = p
-
-<span class="keyword">def</span> <span class="function">mot5</span>(self, p):
-    self.motors[<span class="number">4</span>] = p
-
-<span class="keyword">def</span> <span class="function">mot6</span>(self, p):
-    self.motors[<span class="number">5</span>] = p
-                        </div>
-
-                        <h3>Подключение в __init__</h3>
-                        <div class="code-block">
-<span class="comment"># Подключение всех слайдеров к методам</span>
-self.horizontalSlider.valueChanged.connect(self.mot1)
-self.horizontalSlider_2.valueChanged.connect(self.mot2)
-self.horizontalSlider_3.valueChanged.connect(self.mot3)
-self.horizontalSlider_4.valueChanged.connect(self.mot4)
-self.horizontalSlider_5.valueChanged.connect(self.mot5)
-self.horizontalSlider_6.valueChanged.connect(self.mot6)
-                        </div>
-
-                        <div class="info-box success">
-                            <strong> Совет:</strong> Значения моторов автоматически отображаются в таблице благодаря методу <code>updates()</code>.
-                        </div>
-                    </div>
-                `
-            },
-
-            main_code: {
-                title: "Запуск приложения",
-                icon: "",
-                category: "Примеры",
-                content: `
-                    <h1>Основной код запуска приложения</h1>
-                    
-                    <div class="function-card">
-                        <div class="function-header">
-                            <span class="function-badge badge-method">Точка входа</span>
-                        </div>
-                        <div class="function-description">
-                            Создаёт и запускает приложение PyQt5 с графическим интерфейсом управления роботом.
-                        </div>
-
-                        <h3>Последовательность действий</h3>
-                        <div class="params-section">
-                            <div class="param-item">
-                                <strong>1. Создание приложения</strong>
-                                <p style="margin-top: 5px;"><code>app = QApplication([])</code> - создаёт экземпляр приложения Qt</p>
-                            </div>
-                            <div class="param-item">
-                                <strong>2. Создание окна</strong>
-                                <p style="margin-top: 5px;"><code>window = Ui_Main()</code> - создаёт главное окно приложения</p>
-                            </div>
-                            <div class="param-item">
-                                <strong>3. Отображение окна</strong>
-                                <p style="margin-top: 5px;"><code>window.show()</code> - отображает окно на экране</p>
-                            </div>
-                            <div class="param-item">
-                                <strong>4. Запуск цикла событий</strong>
-                                <p style="margin-top: 5px;"><code>app.exec()</code> - запускает главный цикл обработки событий</p>
-                            </div>
-                        </div>
-
-                        <h3>Полный код запуска</h3>
-                        <div class="code-block">
-<span class="keyword">from</span> PyQt5.QtCore <span class="keyword">import</span> QTimer
-
-<span class="keyword">import</span> ui
-<span class="keyword">from</span> PyQt5.QtWidgets <span class="keyword">import</span> QMainWindow, QApplication
-<span class="keyword">from</span> PyQt5.QtWidgets <span class="keyword">import</span> QApplication, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
-
-
-
-<span class="keyword">class</span> <span class="function">Ui_Main</span>(QMainWindow, ui.Ui_MainWindow):
-    <span class="keyword">def</span> <span class="function">__init__</span>(self):
-        <span class="comment"># ... весь код класса ...</span>
-
-app = QApplication([])
-
-window = Ui_Main()
-window.show()
-
-app.exec()
-                        </div>
-
-                        <div class="info-box">
-                            <strong> Примечание:</strong> Метод <code>exec()</code> блокирует выполнение до закрытия приложения. 
-                            Все события обрабатываются в цикле событий Qt.
-                        </div>
-                    </div>
-                `
-            }
-        };
-
-        // Функция для генерации меню
-        function generateMenu() {
-            const navMenu = document.getElementById('navMenu');
-            const categories = {};
-
-            // Группировка по категориям
-            Object.keys(documentation).forEach(key => {
-                const item = documentation[key];
-                if (!categories[item.category]) {
-                    categories[item.category] = [];
-                }
-                categories[item.category].push({ key, ...item });
-            });
-
-            // Создание меню
-            Object.keys(categories).forEach(category => {
-                const section = document.createElement('div');
-                section.className = 'nav-section';
-                
-                const title = document.createElement('div');
-                title.className = 'nav-section-title';
-                title.textContent = category;
-                section.appendChild(title);
-
-                categories[category].forEach(item => {
-                    const navItem = document.createElement('div');
-                    navItem.className = 'nav-item';
-                    navItem.dataset.section = item.key;
-                    navItem.innerHTML = `
-                        <span class="nav-item-icon">${item.icon}</span>
-                        <span>${item.title}</span>
-                    `;
-                    navItem.onclick = () => showSection(item.key);
-                    section.appendChild(navItem);
-                });
-
-                navMenu.appendChild(section);
-            });
-        }
-
-        // Функция для отображения секции
-        function showSection(sectionKey) {
-            // Удаление активного класса у всех секций
-            document.querySelectorAll('.content-section').forEach(el => {
-                el.classList.remove('active');
-            });
-            document.querySelectorAll('.nav-item').forEach(el => {
-                el.classList.remove('active');
-            });
-
-            // Добавление активного класса
-            const section = document.getElementById(sectionKey);
-            if (section) {
-                section.classList.add('active');
-            }
-            const navItem = document.querySelector(`[data-section="${sectionKey}"]`);
-            if (navItem) {
-                navItem.classList.add('active');
-            }
-        }
-
-        // Функция для генерации контента
-        function generateContent() {
-            const mainContent = document.getElementById('mainContent');
+        (function() {
             
-            Object.keys(documentation).forEach(key => {
-                const section = document.createElement('div');
-                section.id = key;
-                section.className = 'content-section';
-                section.innerHTML = documentation[key].content;
-                mainContent.appendChild(section);
-            });
-        }
 
-        // Инициализация
-        document.addEventListener('DOMContentLoaded', () => {
-            generateMenu();
-            generateContent();
-            showSection('overview'); // Показать первую секцию
-        });
+            var uiPy = "# -*- coding: utf-8 -*-\n\n# Form implementation generated from reading ui file 'ui.ui'\n#\n# Created by: PyQt5 UI code generator 5.15.11\n#\n# WARNING: Any manual changes made to this file will be lost when pyuic5 is\n# run again.  Do not edit this file unless you know what you are doing.\n\n\nfrom PyQt5 import QtCore, QtGui, QtWidgets\n\n\nclass Ui_MainWindow(object):\n    def setupUi(self, MainWindow):\n        MainWindow.setObjectName(\"MainWindow\")\n        MainWindow.resize(1297, 845)\n        self.centralwidget = QtWidgets.QWidget(MainWindow)\n        self.centralwidget.setObjectName(\"centralwidget\")\n        self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)\n        self.tableWidget.setGeometry(QtCore.QRect(650, 70, 571, 261))\n        self.tableWidget.setObjectName(\"tableWidget\")\n        self.tableWidget.setColumnCount(4)\n        self.tableWidget.setRowCount(6)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(3, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(4, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(5, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(3, item)\n        self.pushButton_2 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_2.setGeometry(QtCore.QRect(470, 10, 261, 51))\n        font = QtGui.QFont()\n        font.setPointSize(11)\n        font.setBold(False)\n        font.setWeight(50)\n        self.pushButton_2.setFont(font)\n        self.pushButton_2.setStyleSheet(\"color:red\")\n        self.pushButton_2.setObjectName(\"pushButton_2\")\n        self.horizontalSlider_5 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_5.setGeometry(QtCore.QRect(90, 500, 451, 22))\n        self.horizontalSlider_5.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_5.setObjectName(\"horizontalSlider_5\")\n        self.horizontalSlider = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider.setGeometry(QtCore.QRect(90, 200, 451, 22))\n        self.horizontalSlider.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider.setObjectName(\"horizontalSlider\")\n        self.textBrowser = QtWidgets.QTextBrowser(self.centralwidget)\n        self.textBrowser.setGeometry(QtCore.QRect(20, 610, 571, 171))\n        self.textBrowser.setObjectName(\"textBrowser\")\n        self.horizontalSlider_4 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_4.setGeometry(QtCore.QRect(90, 440, 451, 22))\n        self.horizontalSlider_4.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_4.setObjectName(\"horizontalSlider_4\")\n        self.horizontalSlider_6 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_6.setGeometry(QtCore.QRect(90, 380, 451, 22))\n        self.horizontalSlider_6.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_6.setObjectName(\"horizontalSlider_6\")\n        self.pushButton = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton.setGeometry(QtCore.QRect(120, 10, 101, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton.setFont(font)\n        self.pushButton.setObjectName(\"pushButton\")\n        self.horizontalSlider_2 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_2.setGeometry(QtCore.QRect(90, 260, 451, 22))\n        self.horizontalSlider_2.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_2.setObjectName(\"horizontalSlider_2\")\n        self.pushButton_5 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_5.setGeometry(QtCore.QRect(750, 10, 291, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_5.setFont(font)\n        self.pushButton_5.setObjectName(\"pushButton_5\")\n        self.pushButton_7 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_7.setGeometry(QtCore.QRect(610, 410, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_7.setFont(font)\n        self.pushButton_7.setObjectName(\"pushButton_7\")\n        self.pushButton_3 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_3.setGeometry(QtCore.QRect(240, 10, 211, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_3.setFont(font)\n        self.pushButton_3.setObjectName(\"pushButton_3\")\n        self.pushButton_4 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_4.setGeometry(QtCore.QRect(20, 80, 431, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_4.setFont(font)\n        self.pushButton_4.setObjectName(\"pushButton_4\")\n        self.tableWidget_2 = QtWidgets.QTableWidget(self.centralwidget)\n        self.tableWidget_2.setGeometry(QtCore.QRect(650, 340, 581, 181))\n        self.tableWidget_2.setObjectName(\"tableWidget_2\")\n        self.tableWidget_2.setColumnCount(4)\n        self.tableWidget_2.setRowCount(4)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(3, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(3, item)\n        self.pushButton_8 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_8.setGeometry(QtCore.QRect(610, 450, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_8.setFont(font)\n        self.pushButton_8.setObjectName(\"pushButton_8\")\n        self.pushButton_9 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_9.setGeometry(QtCore.QRect(610, 490, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_9.setFont(font)\n        self.pushButton_9.setObjectName(\"pushButton_9\")\n        self.pushButton_6 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_6.setGeometry(QtCore.QRect(610, 380, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_6.setFont(font)\n        self.pushButton_6.setObjectName(\"pushButton_6\")\n        self.horizontalSlider_3 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_3.setGeometry(QtCore.QRect(90, 320, 451, 22))\n        self.horizontalSlider_3.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_3.setObjectName(\"horizontalSlider_3\")\n        self.comboBox = QtWidgets.QComboBox(self.centralwidget)\n        self.comboBox.setGeometry(QtCore.QRect(180, 140, 171, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.comboBox.setFont(font)\n        self.comboBox.setObjectName(\"comboBox\")\n        self.comboBox.addItem(\"\")\n        self.comboBox.addItem(\"\")\n        self.label = QtWidgets.QLabel(self.centralwidget)\n        self.label.setGeometry(QtCore.QRect(20, 190, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label.setFont(font)\n        self.label.setObjectName(\"label\")\n        self.label_2 = QtWidgets.QLabel(self.centralwidget)\n        self.label_2.setGeometry(QtCore.QRect(20, 250, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_2.setFont(font)\n        self.label_2.setObjectName(\"label_2\")\n        self.label_3 = QtWidgets.QLabel(self.centralwidget)\n        self.label_3.setGeometry(QtCore.QRect(20, 310, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_3.setFont(font)\n        self.label_3.setObjectName(\"label_3\")\n        self.label_4 = QtWidgets.QLabel(self.centralwidget)\n        self.label_4.setGeometry(QtCore.QRect(20, 370, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_4.setFont(font)\n        self.label_4.setObjectName(\"label_4\")\n        self.label_5 = QtWidgets.QLabel(self.centralwidget)\n        self.label_5.setGeometry(QtCore.QRect(20, 430, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_5.setFont(font)\n        self.label_5.setObjectName(\"label_5\")\n        self.label_6 = QtWidgets.QLabel(self.centralwidget)\n        self.label_6.setGeometry(QtCore.QRect(20, 490, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_6.setFont(font)\n        self.label_6.setObjectName(\"label_6\")\n        self.label_7 = QtWidgets.QLabel(self.centralwidget)\n        self.label_7.setGeometry(QtCore.QRect(30, 560, 81, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_7.setFont(font)\n        self.label_7.setObjectName(\"label_7\")\n        self.checkBox = QtWidgets.QCheckBox(self.centralwidget)\n        self.checkBox.setGeometry(QtCore.QRect(620, 680, 261, 31))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        self.checkBox.setFont(font)\n        self.checkBox.setObjectName(\"checkBox\")\n        self.checkBox_2 = QtWidgets.QCheckBox(self.centralwidget)\n        self.checkBox_2.setGeometry(QtCore.QRect(620, 740, 251, 21))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        self.checkBox_2.setFont(font)\n        self.checkBox_2.setObjectName(\"checkBox_2\")\n        self.pushButton_10 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_10.setGeometry(QtCore.QRect(30, 10, 71, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_10.setFont(font)\n        self.pushButton_10.setObjectName(\"pushButton_10\")\n        self.label_8 = QtWidgets.QLabel(self.centralwidget)\n        self.label_8.setGeometry(QtCore.QRect(980, 710, 41, 41))\n        self.label_8.setText(\"\")\n        self.label_8.setObjectName(\"label_8\")\n        self.label_9 = QtWidgets.QLabel(self.centralwidget)\n        self.label_9.setGeometry(QtCore.QRect(1050, 710, 41, 41))\n        self.label_9.setText(\"\")\n        self.label_9.setObjectName(\"label_9\")\n        self.label_10 = QtWidgets.QLabel(self.centralwidget)\n        self.label_10.setGeometry(QtCore.QRect(1120, 710, 41, 41))\n        self.label_10.setText(\"\")\n        self.label_10.setObjectName(\"label_10\")\n        self.label_11 = QtWidgets.QLabel(self.centralwidget)\n        self.label_11.setGeometry(QtCore.QRect(1190, 710, 41, 41))\n        self.label_11.setText(\"\")\n        self.label_11.setObjectName(\"label_11\")\n        MainWindow.setCentralWidget(self.centralwidget)\n        self.menubar = QtWidgets.QMenuBar(MainWindow)\n        self.menubar.setGeometry(QtCore.QRect(0, 0, 1297, 26))\n        self.menubar.setObjectName(\"menubar\")\n        MainWindow.setMenuBar(self.menubar)\n        self.statusbar = QtWidgets.QStatusBar(MainWindow)\n        self.statusbar.setObjectName(\"statusbar\")\n        MainWindow.setStatusBar(self.statusbar)\n\n        self.retranslateUi(MainWindow)\n        QtCore.QMetaObject.connectSlotsByName(MainWindow)\n\n    def retranslateUi(self, MainWindow):\n        _translate = QtCore.QCoreApplication.translate\n        MainWindow.setWindowTitle(_translate(\"MainWindow\", \"MainWindow\"))\n        item = self.tableWidget.verticalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"1 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"2 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"3 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"4 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(4)\n        item.setText(_translate(\"MainWindow\", \"5 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(5)\n        item.setText(_translate(\"MainWindow\", \"6 мотор\"))\n        item = self.tableWidget.horizontalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"Температура\"))\n        item = self.tableWidget.horizontalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"тики\"))\n        item = self.tableWidget.horizontalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"радианы\"))\n        item = self.tableWidget.horizontalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"градусы\"))\n        self.pushButton_2.setText(_translate(\"MainWindow\", \"Экстренное торможение\"))\n        self.pushButton.setText(_translate(\"MainWindow\", \"пауза\"))\n        self.pushButton_5.setText(_translate(\"MainWindow\", \"Сохранить состояние системы\"))\n        self.pushButton_7.setText(_translate(\"MainWindow\", \"+\"))\n        self.pushButton_3.setText(_translate(\"MainWindow\", \"Возвращение на старт \"))\n        self.pushButton_4.setText(_translate(\"MainWindow\", \"Начало работы в ручном режиме управления\"))\n        item = self.tableWidget_2.verticalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"красный\"))\n        item = self.tableWidget_2.verticalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"зеленый\"))\n        item = self.tableWidget_2.verticalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"синий\"))\n        item = self.tableWidget_2.verticalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"Брак\"))\n        item = self.tableWidget_2.horizontalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"кол-во\"))\n        item = self.tableWidget_2.horizontalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"время последнего перемещения\"))\n        item = self.tableWidget_2.horizontalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"зеленый\"))\n        item = self.tableWidget_2.horizontalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"брак\"))\n        self.pushButton_8.setText(_translate(\"MainWindow\", \"+\"))\n        self.pushButton_9.setText(_translate(\"MainWindow\", \"+\"))\n        self.pushButton_6.setText(_translate(\"MainWindow\", \"+\"))\n        self.comboBox.setItemText(0, _translate(\"MainWindow\", \"по координатам\"))\n        self.comboBox.setItemText(1, _translate(\"MainWindow\", \"по градусам\"))\n        self.label.setText(_translate(\"MainWindow\", \"X\"))\n        self.label_2.setText(_translate(\"MainWindow\", \"Y\"))\n        self.label_3.setText(_translate(\"MainWindow\", \"Z\"))\n        self.label_4.setText(_translate(\"MainWindow\", \"Rx\"))\n        self.label_5.setText(_translate(\"MainWindow\", \"Ry\"))\n        self.label_6.setText(_translate(\"MainWindow\", \"Rz\"))\n        self.label_7.setText(_translate(\"MainWindow\", \"Логи:\"))\n        self.checkBox.setText(_translate(\"MainWindow\", \"Захват(вкл/выкл)\"))\n        self.checkBox_2.setText(_translate(\"MainWindow\", \"конвейер(вкл/выкл)\"))\n        self.pushButton_10.setText(_translate(\"MainWindow\", \"Старт\"))";
+
+            document.getElementById('main-py-code').textContent = document.getElementById('main-py-raw').textContent;
+            document.getElementById('ui-py-code').textContent = uiPy;
+        })();
     </script>
 </body>
 </html>
