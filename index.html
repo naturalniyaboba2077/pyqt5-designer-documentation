@@ -460,482 +460,977 @@
             <pre class="full-code-block" id="main-py-code"></pre>
         </div>
 <script type="text/plain" id="main-py-raw">
-from PyQt5.QtCore import QTimer
-from datetime import datetime
-import ui
-from PyQt5.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QMainWindow, QFileDialog, QMessageBox
-import math
-import random
-import socket
 import sys
+import time
+from datetime import datetime
+from math import degrees, radians, cos, sin, pi
+from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QTableWidgetItem, QFileDialog, QMessageBox,
+    QTabWidget, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QTextEdit, QLineEdit, QCheckBox, QGroupBox, QGridLayout)
+from PyQt5.QtGui import QImage, QPixmap
+import ui
 
-DEFAULT_TCP_PAIRS = [
-    ("192.168.1.1", 502),
-    ("192.168.1.1", 9999),
-    ("192.168.7.2", 9999),
-    ("127.0.0.1", 502),
-    ("127.0.0.1", 9999),
-]
-DEFAULT_SERIAL_PORTS = ["COM3", "COM1", "COM4", "COM2"] if sys.platform == "win32" else ["/dev/ttyUSB0", "/dev/ttyACM0"]
-CONNECT_TIMEOUT = 2.0
+try:
+    from motion.core import RobotControl, Waypoint, LedLamp, SmartCamera
+    from motion.robot_control import Modes, States, InterpreterStates, StateEvents, ModeCommands
+    try:
+        from motion.robot_control import InterpreterEvents
+    except ImportError:
+        InterpreterEvents = None
+    HAS_MOTION_CORE = True
+except ImportError:
+    HAS_MOTION_CORE = False
+    RobotControl = None
+    Waypoint = None
+    LedLamp = None
+    SmartCamera = None
+    Modes = None
+    States = None
+    InterpreterEvents = None
+    InterpreterStates = None
+    StateEvents = None
+    ModeCommands = None
+
+
+class ModesFallback:
+    INIT_M = 0
+    PAUSE_M = 1
+    AUTO_RUN_M = 2
+    MANUAL_JOINT_MODE_M = 3
+    MANUAL_CART_MODE_M = 4
+    SEMI_AUTO_M = 5
+    TORQUE_M = 6
+    MOVE_TO_START_M = 7
+
+
+class InterpreterStatesFallback:
+    PROGRAM_STOP_S = 0
+    PROGRAM_RUN_S = 1
+    PROGRAM_PAUSE_S = 2
+    MOTION_NOT_ALLOWED_S = 3
+    IN_TRANSITION = 100
+    PROGRAM_IS_DONE = 200
+
+
+if not HAS_MOTION_CORE:
+    Modes = ModesFallback
+    InterpreterStates = InterpreterStatesFallback
 
 
 class RobotAPI:
-    LAMP_OFF = 0
-    LAMP_BLUE = 1
-    LAMP_GREEN = 2
-    LAMP_YELLOW = 3
-    LAMP_RED = 4
 
-    def __init__(self):
+    def __init__(self, robot_ip="192.168.2.100", lamp_ip="192.168.2.101", camera_ip="192.168.2.110"):
+        self.robot_ip = robot_ip
+        self.lamp_ip = lamp_ip
+        self.camera_ip = camera_ip
+        self._robot = None
+        self._lamp = None
+        self._camera = None
         self._connected = False
-        self._feedback_serial = None
-        self._feedback_socket = None
-        self._joint_positions_deg = [0.0] * 6
-        self._joint_positions_rad = [0.0] * 6
-        self._joint_ticks = [0] * 6
-        self._joint_temperatures = [25.0] * 6
-        self._cartesian_pose = [0.0] * 6
-        self._gripper_open = True
-        self._conveyor_on = False
-        self._lamp_state = self.LAMP_OFF
-        self._last_commanded_deg = [0.0] * 6
-        self._feedback_received = False
-        self._connection_error = None
-        self._feedback_channel_name = None
-    def connect(self, host=None, port=None):
-        self._connected = False
-        self._close_feedback_channel()
-        self._connection_error = None
-        self._feedback_channel_name = None
-        for addr, port_num in DEFAULT_TCP_PAIRS:
-            s = None
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(CONNECT_TIMEOUT)
-                s.connect((addr, port_num))
-                s.settimeout(0.05)
-                self._feedback_socket = s
+        self._engaged = False
+        self._manual_enabled = False
+        self._demo_mode = not HAS_MOTION_CORE
+        if self._demo_mode:
+            self._demo_tool = [0.24, -0.135, 0.24, pi/2, 0.0, pi]
+            self._demo_joints = [0.0, 0.0, pi/2, 0.0, pi/2, 0.0]
+            self._demo_ticks = [0] * 6
+            self._demo_temp = [25.0] * 6
+            self._demo_linear_track = [0.0]
+            self._demo_tool_state = 0
+            self._demo_mode_val = Modes.PAUSE_M
+            self._demo_interpreter = InterpreterStates.PROGRAM_STOP_S
+            self._demo_conveyer = False
+
+    def is_demo_mode(self):
+        return self._demo_mode
+
+    def connect(self):
+        if self._demo_mode:
+            self._connected = True
+            self._demo_mode_val = Modes.PAUSE_M
+            self._demo_interpreter = InterpreterStates.PROGRAM_STOP_S
+            return True
+        try:
+            self._robot = RobotControl(self.robot_ip)
+            self._lamp = LedLamp(self.lamp_ip)
+            self._camera = SmartCamera(self.camera_ip)
+            if self._robot.connect():
                 self._connected = True
-                self._feedback_channel_name = f"{addr}:{port_num}"
-                self._lamp_state = self.LAMP_BLUE
                 return True
-            except (socket.timeout, OSError, ConnectionRefusedError):
-                if s:
-                    try:
-                        s.close()
-                    except Exception:
-                        pass
-            except Exception:
-                if s:
-                    try:
-                        s.close()
-                    except Exception:
-                        pass
-        for port_name in DEFAULT_SERIAL_PORTS:
-            try:
-                import serial
-                self._feedback_serial = serial.Serial(port_name, 115200, timeout=0.05)
-                self._connected = True
-                self._feedback_channel_name = port_name
-                self._lamp_state = self.LAMP_BLUE
-                return True
-            except Exception:
-                self._feedback_serial = None
-        self._connection_error = None
+        except Exception:
+            pass
         return False
-    def get_connection_error(self):
-        return getattr(self, "_connection_error", None)
-    def get_feedback_channel_name(self):
-        return getattr(self, "_feedback_channel_name", None)
-    def has_feedback_channel(self):
-        return (self._feedback_serial is not None) or (self._feedback_socket is not None)
-    def disconnect(self):
-        self._close_feedback_channel()
-        self._connected = False
-        self._lamp_state = self.LAMP_OFF
-        self._feedback_received = False
-    def _close_feedback_channel(self):
-        if self._feedback_serial:
-            try:
-                self._feedback_serial.close()
-            except Exception:
-                pass
-            self._feedback_serial = None
-        if self._feedback_socket:
-            try:
-                self._feedback_socket.close()
-            except Exception:
-                pass
-            self._feedback_socket = None
+
+    def disengage(self):
+        if self._demo_mode:
+            self._connected = False
+            self._engaged = False
+            self._manual_enabled = False
+            return True
+        try:
+            if self._robot:
+                result = self._robot.disengage()
+                self._connected = False
+                self._engaged = False
+                self._manual_enabled = False
+                if self._lamp:
+                    self._lamp.setLamp("0001")
+                return result
+        except Exception:
+            pass
+        return False
+
+    def engage(self):
+        if self._demo_mode:
+            self._engaged = True
+            return True
+        try:
+            if self._robot and self._connected:
+                return self._robot.engage()
+        except Exception:
+            pass
+        return False
+
+    def manual_cart_mode(self):
+        if self._demo_mode:
+            self._demo_mode_val = Modes.MANUAL_CART_MODE_M
+            return True
+        try:
+            return self._robot.manualCartMode()
+        except Exception:
+            return False
+
+    def manual_joint_mode(self):
+        if self._demo_mode:
+            self._demo_mode_val = Modes.MANUAL_JOINT_MODE_M
+            return True
+        try:
+            return self._robot.manualJointMode()
+        except Exception:
+            return False
+
+    def set_cartesian_velocity(self, velocity):
+        if self._demo_mode:
+            for i in range(min(6, len(velocity))):
+                self._demo_tool[i] = self._demo_tool[i] + velocity[i] * 0.1
+            return True
+        try:
+            return self._robot.setCartesianVelocity(velocity)
+        except Exception:
+            return False
+
+    def set_joint_velocity(self, velocity):
+        if self._demo_mode:
+            for i in range(min(6, len(velocity))):
+                self._demo_joints[i] = self._demo_joints[i] + velocity[i] * 0.1
+            return True
+        try:
+            return self._robot.setJointVelocity(velocity)
+        except Exception:
+            return False
+
+    def set_linear_track_velocity(self, velocity):
+        if self._demo_mode:
+            self._demo_linear_track[0] = self._demo_linear_track[0] + velocity[0] * 0.1
+            return True
+        try:
+            return self._robot.setLinearTrackVelocity(velocity)
+        except Exception:
+            return False
+
+    def move_to_initial_pose(self):
+        if self._demo_mode:
+            self._demo_joints = [0.0, 0.0, pi/2, 0.0, pi/2, 0.0]
+            self._demo_linear_track = [0.0]
+            return True
+        try:
+            return self._robot.moveToInitialPose()
+        except Exception:
+            return False
+
+    def activate_move_to_start(self):
+        if self._demo_mode:
+            self._demo_interpreter = InterpreterStates.PROGRAM_RUN_S
+            return True
+        try:
+            return self._robot.activateMoveToStart()
+        except Exception:
+            return False
+
+    def play(self):
+        if self._demo_mode:
+            self._demo_mode_val = Modes.AUTO_RUN_M
+            self._demo_interpreter = InterpreterStates.PROGRAM_RUN_S
+            return True
+        try:
+            return self._robot.play()
+        except Exception:
+            return False
+
+    def pause(self):
+        if self._demo_mode:
+            self._demo_mode_val = Modes.PAUSE_M
+            self._demo_interpreter = InterpreterStates.PROGRAM_PAUSE_S
+            return True
+        try:
+            return self._robot.pause()
+        except Exception:
+            return False
+
+    def stop(self):
+        if self._demo_mode:
+            self._demo_mode_val = Modes.PAUSE_M
+            self._demo_interpreter = InterpreterStates.PROGRAM_STOP_S
+            return True
+        try:
+            return self._robot.stop()
+        except Exception:
+            return False
+
+    def reset(self):
+        if self._demo_mode:
+            self._demo_interpreter = InterpreterStates.PROGRAM_STOP_S
+            return True
+        try:
+            return self._robot.reset()
+        except Exception:
+            return False
+
+    def get_robot_mode(self):
+        if self._demo_mode:
+            return self._demo_mode_val
+        try:
+            return self._robot.getRobotMode()
+        except Exception:
+            return Modes.PAUSE_M
+
+    def get_robot_state(self):
+        if self._demo_mode:
+            return 4
+        try:
+            return self._robot.getRobotState()
+        except Exception:
+            return 4
+
+    def get_actual_state_out(self):
+        if self._demo_mode:
+            return self._demo_interpreter
+        try:
+            return self._robot.getActualStateOut()
+        except Exception:
+            return InterpreterStates.PROGRAM_STOP_S
+
+    def get_tool_position(self):
+        if self._demo_mode:
+            return list(self._demo_tool)
+        try:
+            return self._robot.getToolPosition()
+        except Exception:
+            return [0.0] * 6
+
+    def get_motor_position_radians(self):
+        if self._demo_mode:
+            return list(self._demo_joints)
+        try:
+            return self._robot.getMotorPositionRadians()
+        except Exception:
+            return [0.0] * 6
+
+    def get_motor_position_tick(self):
+        if self._demo_mode:
+            return list(self._demo_ticks)
+        try:
+            return self._robot.getMotorPositionTick()
+        except Exception:
+            return [0] * 6
+
+    def get_actual_temperature(self):
+        if self._demo_mode:
+            return list(self._demo_temp)
+        try:
+            return self._robot.getActualTemperature()
+        except Exception:
+            return [0.0] * 6
+
+    def get_tool_state(self):
+        if self._demo_mode:
+            return self._demo_tool_state
+        try:
+            return self._robot.getToolState()
+        except Exception:
+            return 0
+
+    def get_linear_track_position(self):
+        if self._demo_mode:
+            return list(self._demo_linear_track)
+        try:
+            return self._robot.getLinearTrackPosition()
+        except Exception:
+            return [0.0]
+
+    def set_lamp(self, status):
+        if self._demo_mode:
+            return True
+        try:
+            if self._lamp:
+                return self._lamp.setLamp(status)
+        except Exception:
+            pass
+        return False
+
+    def conveyer_start(self):
+        if self._demo_mode:
+            self._demo_conveyer = True
+            return True
+        try:
+            return self._robot.conveyer_start()
+        except Exception:
+            return False
+
+    def conveyer_stop(self):
+        if self._demo_mode:
+            self._demo_conveyer = False
+            return True
+        try:
+            return self._robot.conveyer_stop()
+        except Exception:
+            return False
+
+    def tool_on(self):
+        if self._demo_mode:
+            self._demo_tool_state = 1
+            return True
+        try:
+            return self._robot.toolON()
+        except Exception:
+            return False
+
+    def tool_off(self):
+        if self._demo_mode:
+            self._demo_tool_state = 0
+            return True
+        try:
+            return self._robot.toolOFF()
+        except Exception:
+            return False
+
+    def get_person(self):
+        if self._demo_mode:
+            return 0
+        try:
+            if self._camera:
+                return self._camera.getPerson()
+        except Exception:
+            pass
+        return 0
+
+    def add_move_to_point_l(self, waypoint_list):
+        if self._demo_mode:
+            return True
+        try:
+            return self._robot.addMoveToPointL(waypoint_list)
+        except Exception:
+            return False
+
+    def add_move_to_point_j(self, waypoint_list):
+        if self._demo_mode:
+            return True
+        try:
+            return self._robot.addMoveToPointJ(waypoint_list)
+        except Exception:
+            return False
+
+    def add_linear_track_move(self, position):
+        if self._demo_mode:
+            self._demo_linear_track = [position]
+            return True
+        try:
+            return self._robot.addLinearTrackMove(position)
+        except Exception:
+            return False
+
+    def add_tool_state(self, value):
+        if self._demo_mode:
+            self._demo_tool_state = value
+            return True
+        try:
+            return self._robot.addToolState(value)
+        except Exception:
+            return False
+
+    def add_wait(self, wait_time):
+        if self._demo_mode:
+            time.sleep(wait_time)
+            return True
+        try:
+            return self._robot.addWait(wait_time)
+        except Exception:
+            return False
+
+    def add_conveyer_state(self, value):
+        if self._demo_mode:
+            self._demo_conveyer = value == 1
+            return True
+        try:
+            return self._robot.addConveyerState(value)
+        except Exception:
+            return False
+
     def is_connected(self):
         return self._connected
-    def poll_feedback(self):
-        line = None
-        if self._feedback_serial:
-            try:
-                if self._feedback_serial.in_waiting:
-                    line = self._feedback_serial.readline().decode("utf-8", errors="ignore").strip()
-            except Exception:
-                pass
-        elif self._feedback_socket:
-            try:
-                self._feedback_socket.setblocking(False)
-                line = self._feedback_socket.recv(256).decode("utf-8", errors="ignore").strip()
-                if "\n" in line:
-                    line = line.split("\n")[-1]
-            except (BlockingIOError, socket.timeout, OSError):
-                line = None
-            except Exception:
-                line = None
-        if line:
-            parts = line.replace(",", " ").split()
-            if len(parts) >= 12:
-                try:
-                    for i in range(6):
-                        self._joint_positions_deg[i] = float(parts[i])
-                        self._joint_temperatures[i] = float(parts[i + 6])
-                    self._joint_positions_rad = [math.radians(x) for x in self._joint_positions_deg]
-                    self._joint_ticks = [int(x * 100) for x in self._joint_positions_deg]
-                    self._cartesian_pose = self._fk_simple(self._joint_positions_deg)
-                    self._feedback_received = True
-                    return
-                except (ValueError, IndexError):
-                    pass
-    def get_joint_positions_deg(self):
-        if not self._connected or not self._feedback_received:
-            return None
-        return list(self._joint_positions_deg)
-    def get_joint_positions_rad(self):
-        if not self._connected or not self._feedback_received:
-            return None
-        return list(self._joint_positions_rad)
-    def get_joint_ticks(self):
-        if not self._connected or not self._feedback_received:
-            return None
-        return list(self._joint_ticks)
-    def get_joint_temperatures(self):
-        if not self._connected or not self._feedback_received:
-            return None
-        return list(self._joint_temperatures)
-    def get_cartesian_pose(self):
-        if not self._connected or not self._feedback_received:
-            return None
-        return list(self._cartesian_pose)
-    def get_gripper_state(self):
-        return self._gripper_open
-    def get_conveyor_state(self):
-        return self._conveyor_on
-    def set_traffic_light(self, state):
-        self._lamp_state = state
-    def move_joints_deg(self, j1, j2, j3, j4, j5, j6):
-        if not self._connected:
-            return False
-        self._last_commanded_deg = [float(j1), float(j2), float(j3), float(j4), float(j5), float(j6)]
-        if not self._feedback_serial and not self._feedback_socket:
-            self._joint_positions_deg = list(self._last_commanded_deg)
-            self._joint_positions_rad = [math.radians(x) for x in self._joint_positions_deg]
-            self._joint_ticks = [int(x * 100) for x in self._joint_positions_deg]
-            self._cartesian_pose = self._fk_simple(self._joint_positions_deg)
-            self._update_temperatures_from_load()
-        return True
-    def move_cartesian(self, x, y, z, rx, ry, rz):
-        if not self._connected:
-            return False
-        self._cartesian_pose = [float(x), float(y), float(z), float(rx), float(ry), float(rz)]
-        self._last_commanded_deg = [x * 0.1, y * 0.1, z * 0.1, rx, ry, rz]
-        if not self._feedback_serial and not self._feedback_socket:
-            self._joint_positions_deg = list(self._last_commanded_deg)
-            self._joint_positions_rad = [math.radians(a) for a in self._joint_positions_deg]
-            self._joint_ticks = [int(a * 100) for a in self._joint_positions_deg]
-            self._update_temperatures_from_load()
-        return True
-    def set_gripper(self, open_gripper):
-        self._gripper_open = bool(open_gripper)
-    def set_conveyor(self, on):
-        self._conveyor_on = bool(on)
-    def emergency_stop(self):
-        self._lamp_state = self.LAMP_RED
-    def go_home(self):
-        if not self._connected:
-            return False
-        self.move_joints_deg(0, 0, 0, 0, 0, 0)
-        self._lamp_state = self.LAMP_BLUE
-        return True
-    def _fk_simple(self, joints_deg):
-        j = [math.radians(a) for a in joints_deg]
-        x = 300 * (j[0] * 0.5 + j[1] * 0.3 + j[2] * 0.2)
-        y = 300 * (j[1] * 0.3 + j[3] * 0.2)
-        z = 300 * (0.5 + j[2] * 0.2 + j[4] * 0.1)
-        return [x, y, z, joints_deg[3], joints_deg[4], joints_deg[5]]
-    def _update_temperatures_from_load(self):
-        for i in range(6):
-            load = abs(self._joint_positions_deg[i]) / 36.0
-            self._joint_temperatures[i] = 25.0 + load + random.uniform(-0.5, 0.5)
-            self._joint_temperatures[i] = round(self._joint_temperatures[i], 1)
 
-class Log():
+    def is_engaged(self):
+        return self._engaged
+
+    def set_manual_enabled(self, enabled):
+        self._manual_enabled = enabled
+
+    def is_manual_enabled(self):
+        return self._manual_enabled
+
+
+def waypoint_from_pose(pose):
+    if not HAS_MOTION_CORE or Waypoint is None:
+        return None
+    return Waypoint(pose)
+
+try:
+    import cv2
+    HAS_OPENCV = True
+except ImportError:
+    HAS_OPENCV = False
+
+
+def time_str():
+    return datetime.now().strftime("%H:%M:%S")
+
+
+class Log:
     def __init__(self):
         self.logs = []
         self.errors = []
-    def add_logs(self, log_text):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        log_with_time = f"{log_text} {timestamp}"
-        self.logs.append(log_with_time)
-    def add_errors(self, error_text):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        error_with_time = f"{error_text} {timestamp}"
-        self.errors.append(error_with_time)
-        self.logs.append(error_with_time)
+
+    def add_logs(self, msg):
+        self.logs.append(msg)
+
+    def add_errors(self, msg):
+        self.errors.append(msg)
+        self.logs.append(msg)
+
+    def add_logs_with_time(self, msg):
+        self.logs.append(time_str() + " " + msg)
+
     def get_logs(self):
         return "\n".join(self.logs)
+
     def get_errors(self):
         return "\n".join(self.errors)
-    def save_to_file(self, filepath):
-        try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(self.get_logs())
-            return True
-        except Exception as e:
-            return False
+
+
+class VideoWorker(QThread):
+    frame_ready = pyqtSignal(object)
+    detection_ready = pyqtSignal(dict)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._running = False
+        self._detect = False
+        self._defect = False
+        self._classes = {"red": True, "green": True, "blue": True}
+        self._cap = None
+
+    def set_running(self, v):
+        self._running = v
+
+    def set_detect(self, v):
+        self._detect = v
+
+    def set_defect(self, v):
+        self._defect = v
+
+    def set_classes(self, d):
+        self._classes = d
+
+    def run(self):
+        if not HAS_OPENCV:
+            return
+        self._cap = cv2.VideoCapture(0)
+        if not self._cap.isOpened():
+            return
+        while self._running and self._cap.isOpened():
+            ret, frame = self._cap.read()
+            if not ret:
+                continue
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w = frame.shape[:2]
+            out = frame.copy()
+            det = {"class": None, "iou": 0.0}
+            if self._detect:
+                roi = frame[h//4:3*h//4, w//4:3*w//4]
+                if roi.size > 0:
+                    b, g, r = cv2.split(roi)
+                    mr, mg, mb = r.mean(), g.mean(), b.mean()
+                    if self._classes.get("red") and mr > 120 and mr > mg and mr > mb:
+                        det = {"class": "red", "iou": min(1.0, mr/200)}
+                    elif self._classes.get("green") and mg > 120 and mg > mr and mg > mb:
+                        det = {"class": "green", "iou": min(1.0, mg/200)}
+                    elif self._classes.get("blue") and mb > 120 and mb > mr and mb > mg:
+                        det = {"class": "blue", "iou": min(1.0, mb/200)}
+                    elif self._defect and (mr < 80 and mg < 80 and mb < 80):
+                        det = {"class": "брак", "iou": 0.5}
+                    cx, cy = w//4 + roi.shape[1]//2, h//4 + roi.shape[0]//2
+                    r = min(roi.shape[0], roi.shape[1])//4
+                    cv2.rectangle(out, (cx-r, cy-r), (cx+r, cy+r), (0, 255, 0), 2)
+                    if det["class"]:
+                        cv2.putText(out, det["class"], (cx-r, cy-r-5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+                        cv2.putText(out, "IoU:%.2f" % det["iou"], (cx-r, cy+r+18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1)
+            qimg = QImage(out.data, out.shape[1], out.shape[0], out.strides[0], QImage.Format_RGB888)
+            self.frame_ready.emit(qimg)
+            self.detection_ready.emit(det)
+            self.msleep(33)
+        if self._cap:
+            self._cap.release()
+
 
 class Ui_Main(QMainWindow, ui.Ui_MainWindow):
     def __init__(self):
         super().__init__()
-        self.setupUi(self)
         self.turnon = False
-        self.paused = False
-        self.emergency_stop = False
-        self.manual_mode_active = False
-        self.robot_connected = False
         self.color = 0
-        self.api = RobotAPI()
         self.motors = [0, 0, 0, 0, 0, 0]
-        self.gripper_state = False
-        self.conveyor_state = False
-        self.sorting_stats = {
-            'красный': {'count': 0, 'last_time': ''},
-            'зеленый': {'count': 0, 'last_time': ''},
-            'синий': {'count': 0, 'last_time': ''},
-            'Брак': {'count': 0, 'last_time': ''}
-        }
+        self.manual_started = False
+        self.paused = False
+        self.emergency = False
+        self.move_l_mode = True
+        self.stats_count = [0, 0, 0, 0]
+        self.stats_time = ["", "", "", ""]
+        self.api = RobotAPI()
         self.log = Log()
-        self.pushButton_10.clicked.connect(self.button_start_stop)
-        self.pushButton.clicked.connect(self.button_pause)
-        self.pushButton_2.clicked.connect(self.button_emergency_stop)
-        self.pushButton_3.clicked.connect(self.button_return_to_start)
-        self.pushButton_4.clicked.connect(self.button_manual_mode)
-        self.pushButton_5.clicked.connect(self.save_logs)
-        self.pushButton_6.clicked.connect(lambda: self.add_to_stats('красный'))
-        self.pushButton_7.clicked.connect(lambda: self.add_to_stats('зеленый'))
-        self.pushButton_8.clicked.connect(lambda: self.add_to_stats('синий'))
-        self.pushButton_9.clicked.connect(lambda: self.add_to_stats('Брак'))
-        self.comboBox.currentTextChanged.connect(self.change_cords)
-        self.horizontalSlider.valueChanged.connect(self.mot1)
-        self.horizontalSlider_2.valueChanged.connect(self.mot2)
-        self.horizontalSlider_3.valueChanged.connect(self.mot3)
-        self.horizontalSlider_4.valueChanged.connect(self.mot4)
-        self.horizontalSlider_5.valueChanged.connect(self.mot5)
-        self.horizontalSlider_6.valueChanged.connect(self.mot6)
-        self.checkBox.stateChanged.connect(self.toggle_gripper)
-        self.checkBox_2.stateChanged.connect(self.toggle_conveyor)
-        self.set_sliders_enabled(False)
+        self.move_list = []
+        self.cells_filled = [0, 0, 0, 0]
+        self.cells_max = 5
+        self.auto_by_points_running = False
+        self.full_auto_running = False
+        self.empty_list_wait_sec = 0
+        self.no_object_sec = 0
+        self.last_detected_class = None
+        self.log_b = []
+        self.log_c = []
+        self.video_worker = VideoWorker(self)
+        self.video_worker.frame_ready.connect(self.on_video_frame)
+        self.video_worker.detection_ready.connect(self.on_detection)
 
-        for slider in [self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
-                      self.horizontalSlider_4, self.horizontalSlider_5, self.horizontalSlider_6]:
-            slider.setMinimum(-180)
-            slider.setMaximum(180)
-            slider.setValue(0)
-        self.init_tables()
+        self.setupUi(self)
+        self.centralwidget.setMinimumSize(1280, 800)
+
+        wrap_a = QWidget()
+        lay_a = QVBoxLayout(wrap_a)
+        lay_a.addWidget(self.centralwidget)
+        self.label_tool_pose = QLabel("—")
+        self.label_tool_pose.setWordWrap(True)
+        lay_a.addWidget(QLabel("Actual tool pose (координаты РИ, состояние схвата):"))
+        lay_a.addWidget(self.label_tool_pose)
+        row_path = QHBoxLayout()
+        row_path.addWidget(QLabel("Путь для сохранения логов:"))
+        self.edit_log_path = QLineEdit()
+        self.edit_log_path.setPlaceholderText("C:\\путь\\к\\файлу.txt")
+        row_path.addWidget(self.edit_log_path)
+        lay_a.addLayout(row_path)
+
+        self.tabs = QTabWidget()
+        self.tabs.addTab(wrap_a, "Модуль А — Ручной режим")
+        self.tab_b = self._build_tab_b()
+        self.tabs.addTab(self.tab_b, "Модуль Б — Автоматический режим")
+        self.tab_c = self._build_tab_c()
+        self.tabs.addTab(self.tab_c, "Модуль В — Компьютерное зрение и ИИ")
+        self.setCentralWidget(self.tabs)
+
+        self.tableWidget_2.itemChanged.connect(self.on_stats_count_edited)
+
+        self.pushButton_10.clicked.connect(self.button_click)
+        self.comboBox.currentTextChanged.connect(self.change_cords)
+        self.pushButton.clicked.connect(self.button_pause)
+        self.pushButton_2.clicked.connect(self.button_emergency)
+        self.pushButton_3.clicked.connect(self.button_return_start)
+        self.pushButton_4.clicked.connect(self.button_manual)
+        self.pushButton_5.clicked.connect(self.button_save_state)
+        self.pushButton_6.clicked.connect(lambda: self.stats_plus(0))
+        self.pushButton_7.clicked.connect(lambda: self.stats_plus(1))
+        self.pushButton_8.clicked.connect(lambda: self.stats_plus(2))
+        self.pushButton_9.clicked.connect(lambda: self.stats_plus(3))
+        self.checkBox.stateChanged.connect(self.check_gripper)   # Захват вкл/выкл -> tool_on / tool_off (API)
+        self.checkBox_2.stateChanged.connect(self.check_conveyor)  # Конвейер вкл/выкл -> conveyer_start / conveyer_stop (API)
+        # Порядок по вертикали в UI: J1,J2,J3 — slider, slider_2, slider_3; J4,J5,J6 — slider_6, slider_4, slider_5
+        self.sliders_list = [
+            self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
+            self.horizontalSlider_6, self.horizontalSlider_4, self.horizontalSlider_5
+        ]
+        self.horizontalSlider.valueChanged.connect(self.mot1)   # J1 -> мотор 1
+        self.horizontalSlider_2.valueChanged.connect(self.mot2)  # J2 -> мотор 2
+        self.horizontalSlider_3.valueChanged.connect(self.mot3)   # J3 -> мотор 3
+        self.horizontalSlider_6.valueChanged.connect(self.mot4)   # J4 -> мотор 4
+        self.horizontalSlider_4.valueChanged.connect(self.mot5)  # J5 -> мотор 5
+        self.horizontalSlider_5.valueChanged.connect(self.mot6)   # J6 -> мотор 6
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updates)
         self.timer.start(50)
-    def init_tables(self):
+        self.pushButton_10.setText("Вкл")
+        self.pushButton.setEnabled(False)
+        self.pushButton_3.setEnabled(False)
+        self.pushButton_4.setEnabled(False)
+        for sl in self.sliders_list:
+            sl.setMinimum(-180)
+            sl.setMaximum(180)
+            sl.setValue(0)
+            sl.setEnabled(False)
+        self.tableWidget.setColumnCount(5)
+        self.tableWidget.setHorizontalHeaderItem(3, QTableWidgetItem("Задано (°)"))
+        self.tableWidget.setHorizontalHeaderItem(4, QTableWidgetItem("Градусы (факт)"))
         for i in range(6):
-            self.tableWidget.setItem(i, 0, QTableWidgetItem("25"))
-            self.tableWidget.setItem(i, 1, QTableWidgetItem("0"))
-            self.tableWidget.setItem(i, 2, QTableWidgetItem("0.00"))
             self.tableWidget.setItem(i, 3, QTableWidgetItem("0"))
-        stats_order = ['красный', 'зеленый', 'синий', 'Брак']
-        for i, category in enumerate(stats_order):
-            self.tableWidget_2.setItem(i, 0, QTableWidgetItem("0"))
-            self.tableWidget_2.setItem(i, 1, QTableWidgetItem(""))
-    def set_sliders_enabled(self, enabled):
-        for slider in [self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
-                      self.horizontalSlider_4, self.horizontalSlider_5, self.horizontalSlider_6]:
-            slider.setEnabled(enabled)
-    def check_robot_connection(self):
-        self.log.add_logs("проверка подключения к роботу...")
-        self.update_logs_display()
-        self.robot_connected = self.api.connect()
-        if self.robot_connected:
-            ch = self.api.get_feedback_channel_name()
-            self.log.add_logs(f"робот подключен ({ch})")
-            self.log.add_logs("датчики моторов: подключены")
+            self.tableWidget.setItem(i, 4, QTableWidgetItem("0"))
+
+        self.velocity_timer = QTimer(self)
+        self.velocity_timer.timeout.connect(self.send_velocity)
+        self.velocity_timer.start(100)
+
+        self.log.add_logs_with_time("Приложение запущено.")
+
+    def _build_tab_b(self):
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        g = QGroupBox("Список объектов на перемещение")
+        gl = QVBoxLayout(g)
+        gl.addWidget(QLabel("Текстовое поле списка (очередь категорий):"))
+        self.list_edit_b = QTextEdit()
+        self.list_edit_b.setMaximumHeight(70)
+        self.list_edit_b.setReadOnly(True)
+        gl.addWidget(self.list_edit_b)
+        row_bt = QHBoxLayout()
+        self.btn_add_red_b = QPushButton("Добавить красный")
+        self.btn_add_red_b.clicked.connect(lambda: self.add_to_list_b("red"))
+        row_bt.addWidget(self.btn_add_red_b)
+        self.btn_add_green_b = QPushButton("Добавить зелёный")
+        self.btn_add_green_b.clicked.connect(lambda: self.add_to_list_b("green"))
+        row_bt.addWidget(self.btn_add_green_b)
+        self.btn_add_blue_b = QPushButton("Добавить синий")
+        self.btn_add_blue_b.clicked.connect(lambda: self.add_to_list_b("blue"))
+        row_bt.addWidget(self.btn_add_blue_b)
+        self.btn_add_brak_b = QPushButton("Добавить брак")
+        self.btn_add_brak_b.clicked.connect(lambda: self.add_to_list_b("брак"))
+        row_bt.addWidget(self.btn_add_brak_b)
+        self.btn_del_last_b = QPushButton("Удалить последний добавленный объект")
+        self.btn_del_last_b.clicked.connect(self.del_last_b)
+        row_bt.addWidget(self.btn_del_last_b)
+        self.btn_clear_b = QPushButton("Очистить список")
+        self.btn_clear_b.clicked.connect(self.clear_list_b)
+        row_bt.addWidget(self.btn_clear_b)
+        gl.addLayout(row_bt)
+        lay.addWidget(g)
+        row_sess = QHBoxLayout()
+        row_sess.addWidget(QLabel("Путь сохранения сессии:"))
+        self.edit_session_path = QLineEdit()
+        self.edit_session_path.setPlaceholderText("C:\\путь\\session.txt")
+        row_sess.addWidget(self.edit_session_path)
+        self.btn_save_session = QPushButton("Сохранить сессию в файл")
+        self.btn_save_session.clicked.connect(self.save_session_b)
+        row_sess.addWidget(self.btn_save_session)
+        lay.addLayout(row_sess)
+        g2 = QGroupBox("Ячейки тары по категориям")
+        gl2 = QGridLayout(g2)
+        self.cell_labels_b = []
+        for i, name in enumerate(["Красный", "Зелёный", "Синий", "Брак"]):
+            gl2.addWidget(QLabel(name), i, 0)
+            lb = QLabel("Свободна")
+            self.cell_labels_b.append(lb)
+            gl2.addWidget(lb, i, 1)
+            btn_nc = QPushButton("Новая ячейка")
+            btn_nc.clicked.connect(lambda checked, idx=i: self.new_cell_b(idx))
+            gl2.addWidget(btn_nc, i, 2)
+        lay.addWidget(g2)
+        self.btn_start_points_b = QPushButton("Начать движение по заданным точкам")
+        self.btn_start_points_b.clicked.connect(self.start_movement_by_points_b)
+        lay.addWidget(self.btn_start_points_b)
+        lay.addWidget(QLabel("Логи Модуля Б:"))
+        self.log_edit_b = QTextEdit()
+        self.log_edit_b.setReadOnly(True)
+        self.log_edit_b.setMaximumHeight(120)
+        lay.addWidget(self.log_edit_b)
+        lay.addStretch()
+        return w
+
+    def _build_tab_c(self):
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        g = QGroupBox("RGB-видеопоток с детекцией объектов")
+        gl = QVBoxLayout(g)
+        self.video_label_c = QLabel("Видеопоток (включите детекцию)")
+        self.video_label_c.setMinimumSize(640, 480)
+        self.video_label_c.setStyleSheet("background: #222; color: #888;")
+        self.video_label_c.setAlignment(Qt.AlignCenter)
+        gl.addWidget(self.video_label_c)
+        row_d = QHBoxLayout()
+        self.check_detect_c = QCheckBox("Начать детекцию объектов")
+        self.check_detect_c.stateChanged.connect(self.toggle_detect_c)
+        row_d.addWidget(self.check_detect_c)
+        self.check_defect_c = QCheckBox("Детекция бракованных объектов")
+        self.check_defect_c.stateChanged.connect(lambda s: self.video_worker.set_defect(s == 2))
+        row_d.addWidget(self.check_defect_c)
+        lay.addWidget(g)
+        lay.addLayout(row_d)
+        row_cl = QHBoxLayout()
+        row_cl.addWidget(QLabel("Классы детекции:"))
+        self.check_red_c = QCheckBox("Красный")
+        self.check_red_c.setChecked(True)
+        self.check_red_c.stateChanged.connect(self.update_classes_c)
+        row_cl.addWidget(self.check_red_c)
+        self.check_green_c = QCheckBox("Зелёный")
+        self.check_green_c.setChecked(True)
+        self.check_green_c.stateChanged.connect(self.update_classes_c)
+        row_cl.addWidget(self.check_green_c)
+        self.check_blue_c = QCheckBox("Синий")
+        self.check_blue_c.setChecked(True)
+        self.check_blue_c.stateChanged.connect(self.update_classes_c)
+        row_cl.addWidget(self.check_blue_c)
+        lay.addLayout(row_cl)
+        self.check_person_c = QCheckBox("Детекция человека в рабочей зоне")
+        lay.addWidget(self.check_person_c)
+        self.person_warning_c = QLabel("")
+        self.person_warning_c.setStyleSheet("font-weight: bold; color: red; font-size: 14px;")
+        lay.addWidget(self.person_warning_c)
+        self.btn_full_auto_c = QPushButton("Начать полностью автоматическую сортировку деталей")
+        self.btn_full_auto_c.clicked.connect(self.start_full_auto_c)
+        lay.addWidget(self.btn_full_auto_c)
+        lay.addWidget(QLabel("Логи Модуля В:"))
+        self.log_edit_c = QTextEdit()
+        self.log_edit_c.setReadOnly(True)
+        self.log_edit_c.setMaximumHeight(120)
+        lay.addWidget(self.log_edit_c)
+        lay.addStretch()
+        return w
+
+    def add_log_b(self, msg):
+        self.log_b.append(time_str() + " " + msg)
+        self.log_edit_b.setText("\n".join(self.log_b[-200:]))
+
+    def add_log_c(self, msg, highlight=False):
+        self.log_c.append(time_str() + " " + msg)
+        self.log_edit_c.setText("\n".join(self.log_c[-200:]))
+        if highlight:
+            self.person_warning_c.setText("⚠ Человек в рабочей зоне, система остановлена")
         else:
-            self.log.add_errors("робот не подключен")
-            self.log.add_errors("датчики моторов: недоступны")
-        return self.robot_connected
-    def button_start_stop(self):
+            self.person_warning_c.setText("")
+
+    def add_to_list_b(self, cat):
+        self.move_list.append(cat)
+        self.list_edit_b.setPlainText(", ".join(self.move_list))
+
+    def del_last_b(self):
+        if self.move_list:
+            self.move_list.pop()
+            self.list_edit_b.setPlainText(", ".join(self.move_list))
+
+    def clear_list_b(self):
+        self.move_list.clear()
+        self.list_edit_b.setPlainText("")
+        self.api.stop()
+        self.api.move_to_initial_pose()
+        self.auto_by_points_running = False
+        self.add_log_b("Список очищен. Робот завершает последнее действие и возвращается на старт.")
+
+    def new_cell_b(self, idx):
+        self.cells_filled[idx] = 0
+        self.cell_labels_b[idx].setText("Свободна")
+        self.cell_labels_b[idx].setStyleSheet("")
+
+    def save_session_b(self):
+        path = self.edit_session_path.text().strip()
+        if not path:
+            QMessageBox.warning(self, "Путь", "Введите путь для сохранения сессии.")
+            return
+        if not path.endswith(".txt"):
+            path += ".txt"
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                for i, cat in enumerate(self.move_list):
+                    f.write("%s\t%d\n" % (cat, i))
+            self.add_log_b("Сессия сохранена в " + path)
+            QMessageBox.information(self, "Сохранено", "Сессия сохранена.")
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+
+    def start_movement_by_points_b(self):
+        if self.auto_by_points_running or self.full_auto_running:
+            return
+        if not self.move_list:
+            self.add_log_b("Список для перемещения объектов пуст.")
+            QMessageBox.information(self, "Список пуст", "Добавьте объекты в список.")
+            return
+        self.auto_by_points_running = True
+        self.pushButton_4.setEnabled(False)
+        for sl in self.sliders_list:
+            sl.setEnabled(False)
+        self.add_log_b("Робот начал выполнение программы")
+        QTimer.singleShot(100, self.run_auto_points_loop_b)
+
+    def run_auto_points_loop_b(self):
+        if not self.auto_by_points_running:
+            if self.turnon:
+                self.pushButton_4.setEnabled(True)
+            return
+        if not self.move_list:
+            self.empty_list_wait_sec += 2
+            if self.empty_list_wait_sec >= 5:
+                self.auto_by_points_running = False
+                self.empty_list_wait_sec = 0
+                self.add_log_b("Список пуст. Ожидание 5 сек. Робот возвращается на старт.")
+                self.api.move_to_initial_pose()
+                self.add_log_b("Робот закончил выполнение программы")
+                if self.turnon:
+                    self.pushButton_4.setEnabled(True)
+                return
+            QTimer.singleShot(2000, self.run_auto_points_loop_b)
+            return
+        self.empty_list_wait_sec = 0
+        cat = self.move_list[0]
+        cat_idx = ["red", "green", "blue", "брак"].index(cat) if cat in ["red", "green", "blue", "брак"] else 0
+        if self.cells_filled[cat_idx] >= self.cells_max:
+            self.add_log_b("Ячейка для категории «%s» заполнена. Ожидание «Новая ячейка»." % cat)
+            self.cell_labels_b[cat_idx].setText("Заполнена!")
+            self.cell_labels_b[cat_idx].setStyleSheet("background: #faa;")
+            QTimer.singleShot(2000, self.run_auto_points_loop_b)
+            return
+        tool = self.api.get_tool_position()
+        if tool:
+            self.add_log_b("Текущая координата рабочего инструмента: (%s)" % ", ".join([str(round(x, 4)) for x in tool]))
+        self.move_list.pop(0)
+        self.list_edit_b.setPlainText(", ".join(self.move_list))
+        self.cells_filled[cat_idx] += 1
+        self.stats_count[cat_idx] += 1
+        self.stats_time[cat_idx] = time_str()
+        if self.cells_filled[cat_idx] >= self.cells_max:
+            self.cell_labels_b[cat_idx].setText("Заполнена!")
+            self.cell_labels_b[cat_idx].setStyleSheet("background: #faa;")
+        self.add_log_b("*Объект категории* %s перемещён в ячейку №%d" % (cat, self.cells_filled[cat_idx]))
+        self.tableWidget_2.blockSignals(True)
+        self.tableWidget_2.setItem(cat_idx, 0, QTableWidgetItem(str(self.stats_count[cat_idx])))
+        self.tableWidget_2.setItem(cat_idx, 1, QTableWidgetItem(self.stats_time[cat_idx]))
+        self.tableWidget_2.blockSignals(False)
+        QTimer.singleShot(1500, self.run_auto_points_loop_b)
+
+    def toggle_detect_c(self, state):
+        self.video_worker.set_detect(state == 2)
+        if state == 2 and not self.video_worker.isRunning():
+            self.video_worker.set_running(True)
+            self.video_worker.start()
+        elif state != 2:
+            self.video_worker.set_running(False)
+
+    def update_classes_c(self):
+        self.video_worker.set_classes({
+            "red": self.check_red_c.isChecked(),
+            "green": self.check_green_c.isChecked(),
+            "blue": self.check_blue_c.isChecked(),
+        })
+
+    def on_video_frame(self, qimg):
+        self.video_label_c.setPixmap(QPixmap.fromImage(qimg).scaled(640, 480, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+    def on_detection(self, det):
+        if det.get("class") and self.video_worker._detect:
+            self.add_log_c("Распознан объект: класс=%s, IoU=%.2f" % (det["class"], det.get("iou", 0)))
+            self.last_detected_class = det.get("class")
+            self.no_object_sec = 0
+
+    def start_full_auto_c(self):
+        if self.full_auto_running:
+            return
+        self.full_auto_running = True
+        self.pushButton_4.setEnabled(False)
+        self.btn_start_points_b.setEnabled(False)
+        for sl in self.sliders_list:
+            sl.setEnabled(False)
+        if not self.video_worker.isRunning():
+            self.video_worker.set_detect(True)
+            self.video_worker.set_running(True)
+            self.video_worker.start()
+        self.add_log_c("Начало полностью автоматической сортировки. Ожидание первого объекта.")
+        QTimer.singleShot(5000, self.run_full_auto_loop_c)
+
+    def run_full_auto_loop_c(self):
+        if not self.full_auto_running:
+            return
+        person = self.api.get_person() if not self.api.is_demo_mode() else 0
+        if person != 0 and self.check_person_c.isChecked():
+            self.api.set_lamp("0001")
+            self.add_log_c("Обнаружен человек в рабочей зоне. Детекция остановлена.", highlight=True)
+            QTimer.singleShot(3000, self.run_full_auto_loop_c)
+            return
+        self.person_warning_c.setText("")
+        if self.last_detected_class:
+            cls = self.last_detected_class
+            idx = {"red": 0, "green": 1, "blue": 2, "брак": 3}.get(cls, 0)
+            self.add_log_c("Начало перемещения объекта %s" % cls)
+            self.stats_count[idx] += 1
+            self.stats_time[idx] = time_str()
+            self.tableWidget_2.setItem(idx, 0, QTableWidgetItem(str(self.stats_count[idx])))
+            self.tableWidget_2.setItem(idx, 1, QTableWidgetItem(self.stats_time[idx]))
+            self.add_log_c("Завершение перемещения объекта %s" % cls)
+            self.add_log_c("Кол-во: красный=%d, зелёный=%d, синий=%d, брак=%d" % tuple(self.stats_count))
+            self.tableWidget_2.blockSignals(True)
+            self.tableWidget_2.setItem(idx, 0, QTableWidgetItem(str(self.stats_count[idx])))
+            self.tableWidget_2.setItem(idx, 1, QTableWidgetItem(self.stats_time[idx]))
+            self.tableWidget_2.blockSignals(False)
+            self.last_detected_class = None
+            self.no_object_sec = 0
+        else:
+            self.no_object_sec += 5
+            if self.no_object_sec >= 20:
+                self.add_log_c("Объектов для детекции нет более 20 сек. Робот возвращается на старт.")
+                self.api.move_to_initial_pose()
+                self.no_object_sec = 0
+        QTimer.singleShot(5000, self.run_full_auto_loop_c)
+
+    def button_click(self):
         self.turnon = not self.turnon
         if self.turnon:
-            self.check_robot_connection()
-            self.pushButton_10.setText("Стоп")
-            self.color = 1
-            self.emergency_stop = False
-            self.paused = False
-            self.log.add_logs("робот включен")
-            if self.robot_connected:
-                self.log.add_logs("робот на стартовой позиции")
+            self.pushButton_10.setText("Выкл")
+            if self.api.connect():
+                if self.api.engage():
+                    self.color = 1
+                    self.api.set_lamp("1000")
+                    self.pushButton_3.setEnabled(True)
+                    self.pushButton_4.setEnabled(True)
+                    self.pushButton.setEnabled(True)
+                    self.log.add_logs_with_time("Робот включен")
+                else:
+                    self.log.add_errors("Ошибка включения двигателей")
+                    self.api.disengage()
+                    self.turnon = False
+                    self.pushButton_10.setText("Вкл")
             else:
-                self.log.add_logs("режим без робота")
+                self.log.add_errors("Ошибка подключения к роботу")
+                self.turnon = False
+                self.pushButton_10.setText("Вкл")
         else:
-            self.pushButton_10.setText("Старт")
+            self.api.conveyer_stop()
+            time.sleep(1)
+            self.api.disengage()
+            self.manual_started = False
+            self.pushButton_4.setText("Начало работы в ручном режиме управления")
+            self.pushButton_4.setEnabled(False)
+            self.pushButton.setText("Пауза")
+            self.pushButton.setEnabled(False)
+            self.pushButton_3.setEnabled(False)
+            for sl in self.sliders_list:
+                sl.setEnabled(False)
+            self.pushButton_10.setText("Вкл")
             self.color = 0
-            self.manual_mode_active = False
-            self.set_sliders_enabled(False)
-            self.conveyor_state = False
-            self.checkBox_2.setChecked(False)
-            try:
-                self.api.disconnect()
-            except Exception:
-                pass
-            self.robot_connected = False
-            self.pushButton_4.setText("начало работы в ручном режиме управления")
-            self.log.add_logs("робот выключен")
-            for i in range(6):
-                self.motors[i] = 0
-        self.update_logs_display()
-    def button_pause(self):
-        if not self.turnon:
-            return
-        if self.emergency_stop:
-            return
-        self.paused = not self.paused
-        if self.paused:
-            self.pushButton.setText("продолжить")
-            self.color = 3
-            self.log.add_logs("пауза")
-        else:
-            self.pushButton.setText("пауза")
-            self.color = 2
-            self.log.add_logs("возобновление работы")
-        self.update_logs_display()
-    def button_emergency_stop(self):
-        if not self.turnon:
-            return
-        try:
-            self.api.emergency_stop()
-        except Exception:
-            pass
-        self.emergency_stop = True
-        self.paused = False
-        self.color = 4
-        self.conveyor_state = False
-        self.checkBox_2.setChecked(False)
-        self.manual_mode_active = False
-        self.set_sliders_enabled(False)
-        self.pushButton_4.setText("начало работы в ручном режиме управления")
-        self.pushButton.setText("пауза")
-        self.log.add_logs("аварийная остановка системы")
-        self.update_logs_display()
-    def button_return_to_start(self):
-        if not self.turnon:
-            return
-        try:
-            self.api.go_home()
-        except Exception:
-            pass
-        self.color = 1
-        self.paused = False
-        self.emergency_stop = False
-        self.pushButton.setText("пауза")
-        for i in range(6):
-            self.motors[i] = 0
-        sliders = [self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
-                   self.horizontalSlider_4, self.horizontalSlider_5, self.horizontalSlider_6]
-        for s in sliders:
-            s.blockSignals(True)
-            s.setValue(0)
-            s.blockSignals(False)
-        self.log.add_logs("робот возвращается на стартовую позицию")
-        self.log.add_logs("робот на стартовой позиции")
-        self.update_logs_display()
-    def button_manual_mode(self):
-        if not self.turnon or self.emergency_stop:
-            return
-        self.manual_mode_active = not self.manual_mode_active
-        if self.manual_mode_active:
-            self.pushButton_4.setText("остановить ручной режим")
-            self.set_sliders_enabled(True)
-            self.color = 2  # Зелёный - в работе
-            self.log.add_logs("робот в режиме ручного управления")
-        else:
-            self.pushButton_4.setText("начало работы в ручном режиме управления")
-            self.set_sliders_enabled(False)
-            self.color = 1  # Синий - ожидание
-            self.log.add_logs("ручной режим управления отключен")
-        self.update_logs_display()
-    def toggle_gripper(self, state):
-        self.gripper_state = state == 2
-        try:
-            self.api.set_gripper(not self.gripper_state)
-        except Exception:
-            pass
-        status = "закрыт" if self.gripper_state else "открыт"
-        self.log.add_logs(f"Захват {status}")
-        self.update_logs_display()
-    def toggle_conveyor(self, state):
-        if not self.turnon or self.emergency_stop:
-            self.checkBox_2.setChecked(False)
-            return
-        self.conveyor_state = state == 2
-        try:
-            self.api.set_conveyor(self.conveyor_state)
-        except Exception:
-            pass
-        status = "включен" if self.conveyor_state else "выключен"
-        self.log.add_logs(f"конвейер {status}")
-        self.update_logs_display()
-    def add_to_stats(self, category):
-        self.sorting_stats[category]['count'] += 1
-        self.sorting_stats[category]['last_time'] = datetime.now().strftime("%H:%M:%S")
-        stats_order = ['красный', 'зеленый', 'синий', 'Брак']
-        row = stats_order.index(category)
-        self.tableWidget_2.setItem(row, 0, QTableWidgetItem(str(self.sorting_stats[category]['count'])))
-        self.tableWidget_2.setItem(row, 1, QTableWidgetItem(self.sorting_stats[category]['last_time']))
-        if self.manual_mode_active:
-            coords = self.get_current_coordinates()
-            self.log.add_logs(f"текущая координата рабочего инструмента: {coords} при перемещении объекта")
-        self.update_logs_display()
-    def get_current_coordinates(self):
-        if not self.robot_connected:
-            return "(нет связи)"
-        if self.comboBox.currentText() == "по градусам":
-            j = self.api.get_joint_positions_deg()
-            if j is None:
-                return "(нет данных)"
-            return f"(J1:{j[0]:.1f}, J2:{j[1]:.1f}, J3:{j[2]:.1f}, J4:{j[3]:.1f}, J5:{j[4]:.1f}, J6:{j[5]:.1f})"
-        p = self.api.get_cartesian_pose()
-        if p is None:
-            return "(нет данных)"
-        return f"(X:{p[0]:.1f}, Y:{p[1]:.1f}, Z:{p[2]:.1f}, Rx:{p[3]:.1f}, Ry:{p[4]:.1f}, Rz:{p[5]:.1f})"
-    def save_logs(self):
-        options = QFileDialog.Options()
-        filepath, _ = QFileDialog.getSaveFileName(self, "сохранить логи", "",
-                                                  "Text Files (*.txt);;All Files (*)", 
-                                                  options=options)
-        if filepath:
-            if self.log.save_to_file(filepath):
-                QMessageBox.information(self, "успешно", f"логи успешно сохранены в {filepath}")
-            else:
-                QMessageBox.critical(self, "ошибка", "не удалось сохранить файл")
+            self.api.set_lamp("0001")
+            self.log.add_logs_with_time("Робот выключен")
 
-    def update_logs_display(self):
-        self.textBrowser.setPlainText(self.log.get_logs())
-        self.textBrowser.verticalScrollBar().setValue(
-            self.textBrowser.verticalScrollBar().maximum()
-        )
     def change_cords(self, s):
         if s == "по градусам":
             self.label.setText("J1")
@@ -944,6 +1439,7 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
             self.label_4.setText("J4")
             self.label_5.setText("J5")
             self.label_6.setText("J6")
+            self.move_l_mode = False
         elif s == "по координатам":
             self.label.setText("X")
             self.label_2.setText("Y")
@@ -951,116 +1447,318 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
             self.label_4.setText("Rx")
             self.label_5.setText("Ry")
             self.label_6.setText("Rz")
-    def updates(self):
-        try:
-            self.api.poll_feedback()
-        except Exception:
-            pass
-        try:
-            self.api.set_traffic_light(self.color)
-        except Exception:
-            pass
-        if self.color == 0:
-            self.label_8.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_9.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_10.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_11.setStyleSheet("background-color: white; border: 1px solid black;")
-        elif self.color == 1:
-            self.label_8.setStyleSheet("background-color: blue; border: 1px solid black;")
-            self.label_9.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_10.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_11.setStyleSheet("background-color: white; border: 1px solid black;")
-        elif self.color == 2:
-            self.label_8.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_9.setStyleSheet("background-color: green; border: 1px solid black;")
-            self.label_10.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_11.setStyleSheet("background-color: white; border: 1px solid black;")
-        elif self.color == 3:
-            self.label_8.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_9.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_10.setStyleSheet("background-color: yellow; border: 1px solid black;")
-            self.label_11.setStyleSheet("background-color: white; border: 1px solid black;")
-        elif self.color == 4:
-            self.label_8.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_9.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_10.setStyleSheet("background-color: white; border: 1px solid black;")
-            self.label_11.setStyleSheet("background-color: red; border: 1px solid black;")
+            self.move_l_mode = True
+        if self.manual_started and self.turnon:
+            if self.move_l_mode:
+                self.api.manual_cart_mode()
+            else:
+                self.api.manual_joint_mode()
 
-        temps = self.api.get_joint_temperatures() if self.robot_connected else None
-        ticks = self.api.get_joint_ticks() if self.robot_connected else None
-        rad = self.api.get_joint_positions_rad() if self.robot_connected else None
-        deg = self.api.get_joint_positions_deg() if self.robot_connected else None
-        sliders = [self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
-                   self.horizontalSlider_4, self.horizontalSlider_5, self.horizontalSlider_6]
-        for i in range(6):
-            if self.robot_connected and temps is not None:
-                self.tableWidget.setItem(i, 0, QTableWidgetItem(f"{temps[i]:.1f}"))
+    def button_pause(self):
+        if not self.turnon:
+            return
+        self.paused = not self.paused
+        if self.paused:
+            self.api.pause()
+            self.pushButton.setText("Продолжить")
+            self.color = 3
+            self.api.set_lamp("0010")
+            self.log.add_logs_with_time("Пауза")
+        else:
+            self.api.play()
+            self.pushButton.setText("Пауза")
+            self.color = 2
+            self.api.set_lamp("0100")
+            self.log.add_logs_with_time("Продолжено выполнение")
+
+    def button_emergency(self):
+        self.emergency = True
+        self.api.stop()
+        self.api.conveyer_stop()
+        self.color = 4
+        self.api.set_lamp("0001")
+        self.log.add_logs_with_time("Аварийная остановка системы")
+        self.manual_started = False
+        self.pushButton_4.setText("Начало работы в ручном режиме управления")
+        for sl in self.sliders_list:
+            sl.setEnabled(False)
+        self.paused = False
+        self.pushButton.setText("Пауза")
+        QMessageBox.warning(self, "Экстренное торможение", "Система остановлена.")
+
+    def button_return_start(self):
+        if not self.turnon:
+            return
+        self.api.move_to_initial_pose()
+        self.color = 1
+        self.api.set_lamp("1000")
+        self.log.add_logs_with_time("Робот на стартовой позиции")
+
+    def button_manual(self):
+        if not self.turnon:
+            return
+        self.manual_started = not self.manual_started
+        if self.manual_started:
+            if self.move_l_mode:
+                self.api.manual_cart_mode()
             else:
-                self.tableWidget.setItem(i, 0, QTableWidgetItem("-"))
-            if self.robot_connected and ticks is not None:
-                self.tableWidget.setItem(i, 1, QTableWidgetItem(str(int(ticks[i]))))
-            else:
-                self.tableWidget.setItem(i, 1, QTableWidgetItem("-"))
-            if self.robot_connected and rad is not None:
-                self.tableWidget.setItem(i, 2, QTableWidgetItem(f"{rad[i]:.2f}"))
-            else:
-                self.tableWidget.setItem(i, 2, QTableWidgetItem("-"))
-            if self.robot_connected and deg is not None:
-                self.tableWidget.setItem(i, 3, QTableWidgetItem(f"{deg[i]:.1f}"))
-                if self.manual_mode_active and self.comboBox.currentText() == "по градусам":
-                    s = sliders[i]
-                    v = max(-180, min(180, int(round(deg[i]))))
-                    if s.value() != v:
-                        s.blockSignals(True)
-                        s.setValue(v)
-                        s.blockSignals(False)
-                        self.motors[i] = deg[i]
-            else:
-                self.tableWidget.setItem(i, 3, QTableWidgetItem("-"))
-    def _send_manual_target(self):
-        if not self.robot_connected or not self.manual_mode_active or self.paused or self.emergency_stop:
+                self.api.manual_joint_mode()
+            self.pushButton_4.setText("Остановить ручной режим")
+            for sl in self.sliders_list:
+                sl.setEnabled(True)
+            try:
+                rads = self.api.get_motor_position_radians()
+                if rads and len(rads) >= 6:
+                    for i in range(6):
+                        deg = round(degrees(rads[i]))
+                        while deg > 180:
+                            deg -= 360
+                        while deg < -180:
+                            deg += 360
+                        self.motors[i] = deg
+                        self.sliders_list[i].setValue(deg)
+            except Exception:
+                pass
+            self.color = 2
+            self.api.set_lamp("0100")
+            self.log.add_logs_with_time("Робот в режиме ручного управления")
+        else:
+            self.api.pause()
+            self.pushButton_4.setText("Начало работы в ручном режиме управления")
+            for sl in self.sliders_list:
+                sl.setEnabled(False)
+                sl.setValue(0)
+            self.color = 1
+            self.api.set_lamp("1000")
+            self.log.add_logs_with_time("Ручной режим остановлен")
+
+    def button_save_state(self):
+        """Сохранение состояния: логи + текущее состояние манипулятора по API."""
+        path = self.edit_log_path.text().strip()
+        if not path:
+            path, _ = QFileDialog.getSaveFileName(self, "Сохранить состояние системы", "", "Текстовые файлы (*.txt)")
+        if path:
+            if not path.endswith(".txt"):
+                path += ".txt"
+            try:
+                lines = [self.log.get_logs()]
+                if self.turnon or self.api.is_demo_mode():
+                    try:
+                        tool = self.api.get_tool_position()
+                        rads = self.api.get_motor_position_radians()
+                        if tool:
+                            lines.append("\n--- Состояние манипулятора (по API) ---")
+                            lines.append("Координаты РИ: " + ", ".join([str(round(x, 4)) for x in tool]))
+                        if rads:
+                            degs = [round(degrees(r)) for r in rads]
+                            lines.append("Углы моторов (°): " + ", ".join(str(d) for d in degs))
+                    except Exception:
+                        pass
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(lines))
+                self.log.add_logs_with_time("Состояние системы сохранено в " + path)
+                QMessageBox.information(self, "Сохранено", "Логи и состояние манипулятора сохранены в файл.")
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", "Не удалось сохранить файл: " + str(e))
+        else:
+            QMessageBox.warning(self, "Путь", "Введите путь для сохранения файла в поле или выберите файл.")
+
+    def on_stats_count_edited(self, item):
+        if item.column() != 0:
             return
         try:
-            if self.comboBox.currentText() == "по градусам":
-                self.api.move_joints_deg(
-                    self.motors[0], self.motors[1], self.motors[2],
-                    self.motors[3], self.motors[4], self.motors[5]
-                )
+            row = item.row()
+            val = int(item.text())
+            if val >= 0:
+                self.stats_count[row] = val
+        except ValueError:
+            pass
+
+    def stats_plus(self, row):
+        if not self.turnon:
+            return
+        self.stats_count[row] += 1
+        self.stats_time[row] = time_str()
+        self.tableWidget_2.blockSignals(True)
+        self.tableWidget_2.setItem(row, 0, QTableWidgetItem(str(self.stats_count[row])))
+        self.tableWidget_2.setItem(row, 1, QTableWidgetItem(self.stats_time[row]))
+        self.tableWidget_2.blockSignals(False)
+        tool = self.api.get_tool_position()
+        if tool:
+            coords = ", ".join([str(round(x, 4)) for x in tool])
+            self.log.add_logs_with_time("Текущая координата рабочего инструмента: (" + coords + ") при начале и окончании перемещения объекта")
+
+    def check_gripper(self, state):
+        if state == 2:
+            self.api.tool_on()
+        else:
+            self.api.tool_off()
+
+    def check_conveyor(self, state):
+        if state == 2:
+            self.api.conveyer_start()
+        else:
+            self.api.conveyer_stop()
+
+    def mot1(self, p):
+        self.motors[0] = p
+    def mot2(self, p):
+        self.motors[1] = p
+    def mot3(self, p):
+        self.motors[2] = p
+    def mot4(self, p):
+        self.motors[3] = p
+    def mot5(self, p):
+        self.motors[4] = p
+    def mot6(self, p):
+        self.motors[5] = p
+
+    def send_velocity(self):
+        """Все движения только через API: set_joint_velocity / set_cartesian_velocity."""
+        if not self.manual_started or not self.turnon or self.emergency:
+            return
+        # Позиционное управление: ползунок = целевое положение, скорость пропорциональна ошибке
+        kp = 0.35
+        deadband_deg = 0.5
+        max_vel = 0.05
+        vel = [0.0] * 6
+        try:
+            if self.move_l_mode:
+                current = self.api.get_tool_position()
+                if not current or len(current) < 6:
+                    return
+                for i in range(6):
+                    if i < 3:
+                        target_i = 0.24 + (self.motors[i] / 180.0) * 0.2
+                    else:
+                        target_i = radians(self.motors[i])
+                    err = target_i - current[i]
+                    if abs(err) < (0.002 if i < 3 else 0.009):
+                        continue
+                    v = kp * err
+                    vel[i] = max(-max_vel, min(max_vel, v))
+                self.api.set_cartesian_velocity(vel)
             else:
-                self.api.move_cartesian(
-                    self.motors[0], self.motors[1], self.motors[2],
-                    self.motors[3], self.motors[4], self.motors[5]
-                )
+                current_rad = self.api.get_motor_position_radians()
+                if not current_rad or len(current_rad) < 6:
+                    return
+                for i in range(6):
+                    current_deg = degrees(current_rad[i])
+                    err_deg = self.motors[i] - current_deg
+                    while err_deg > 180:
+                        err_deg -= 360
+                    while err_deg < -180:
+                        err_deg += 360
+                    if abs(err_deg) < deadband_deg:
+                        continue
+                    err_rad = radians(err_deg)
+                    v = kp * err_rad
+                    vel[i] = max(-max_vel, min(max_vel, v))
+                self.api.set_joint_velocity(vel)
         except Exception:
             pass
-    def mot1(self, p):
-        if self.manual_mode_active and not self.paused and not self.emergency_stop:
-            self.motors[0] = p
-            self._send_manual_target()
-    def mot2(self, p):
-        if self.manual_mode_active and not self.paused and not self.emergency_stop:
-            self.motors[1] = p
-            self._send_manual_target()
-    def mot3(self, p):
-        if self.manual_mode_active and not self.paused and not self.emergency_stop:
-            self.motors[2] = p
-            self._send_manual_target()
-    def mot4(self, p):
-        if self.manual_mode_active and not self.paused and not self.emergency_stop:
-            self.motors[3] = p
-            self._send_manual_target()
-    def mot5(self, p):
-        if self.manual_mode_active and not self.paused and not self.emergency_stop:
-            self.motors[4] = p
-            self._send_manual_target()
-    def mot6(self, p):
-        if self.manual_mode_active and not self.paused and not self.emergency_stop:
-            self.motors[5] = p
-            self._send_manual_target()
-app = QApplication([])
-window = Ui_Main()
-window.show()
-app.exec()
+
+    def updates(self):
+        if self.color == 0:
+            self.label_8.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_9.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_10.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_11.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+        elif self.color == 1:
+            self.label_8.setStyleSheet("background-color: blue; border: 1px solid #333;")
+            self.label_9.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_10.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_11.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+        elif self.color == 2:
+            self.label_8.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_9.setStyleSheet("background-color: green; border: 1px solid #333;")
+            self.label_10.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_11.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+        elif self.color == 3:
+            self.label_8.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_9.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_10.setStyleSheet("background-color: yellow; border: 1px solid #333;")
+            self.label_11.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+        elif self.color == 4:
+            self.label_8.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_9.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_10.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+            self.label_11.setStyleSheet("background-color: red; border: 1px solid #333;")
+
+        # Все данные о положении в таблице — только по получению данных с манипулятора по API
+        if self.turnon or self.api.is_demo_mode():
+            try:
+                temps = self.api.get_actual_temperature()
+                ticks = self.api.get_motor_position_tick()
+                rads = self.api.get_motor_position_radians()
+                for i in range(6):
+                    self.tableWidget.setItem(i, 0, QTableWidgetItem(str(round(temps[i], 1)) if temps else "-"))
+                    self.tableWidget.setItem(i, 1, QTableWidgetItem(str(ticks[i]) if ticks else "-"))
+                    self.tableWidget.setItem(i, 2, QTableWidgetItem(str(round(rads[i], 4)) if rads else "-"))
+                    deg_fact = degrees(rads[i]) if rads and i < len(rads) else 0
+                    self.tableWidget.setItem(i, 4, QTableWidgetItem(str(round(deg_fact, 2))))
+            except Exception:
+                pass
+
+        # «Задано» — целевое значение с ползунков (используется в send_velocity через API)
+        for i in range(6):
+            self.tableWidget.setItem(i, 3, QTableWidgetItem(str(self.motors[i])))
+
+        # Поза инструмента — только по API манипулятора
+        try:
+            tool = self.api.get_tool_position()
+            tool_state = self.api.get_tool_state()
+            if tool:
+                coords = ", ".join([str(round(x, 4)) for x in tool])
+                grip = "Закрыт" if tool_state == 1 else "Открыт"
+                self.label_tool_pose.setText("Координаты: %s | Схват: %s" % (coords, grip))
+        except Exception:
+            pass
+        try:
+            mode = self.api.get_robot_mode()
+            interp = self.api.get_actual_state_out()
+            if self.emergency:
+                self.color = 4
+            elif mode == 7 and interp == 3:
+                self.api.activate_move_to_start()
+                self.color = 3
+            elif interp == 1:
+                self.color = 2
+            elif interp == 2:
+                self.color = 3
+            elif interp == 0 and not self.manual_started:
+                self.color = 1
+        except Exception:
+            pass
+
+        self.textBrowser.setText(self.log.get_logs())
+
+    def closeEvent(self, event):
+        """Закрытие по api.txt: conveyer_stop(), time.sleep(1), disengage(), lamp.setLamp('0001')."""
+        self.video_worker.set_running(False)
+        if self.video_worker.isRunning():
+            self.video_worker.wait(2000)
+        self.api.conveyer_stop()
+        time.sleep(1)
+        self.api.disengage()
+        self.api.set_lamp("0001")
+        self.log.add_logs_with_time("Закрытие окна приложения")
+        event.accept()
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    window = Ui_Main()
+    window.setWindowTitle("GUI управления манипулятором — Модули А, Б, В")
+    window.resize(1320, 900)
+    window.show()
+    sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    main()
+
     </script>
         <div class="code-section">
             <div class="code-section-header">ui.py — интерфейс (C:\Users\user\PycharmProjects\robots\ui.py)</div>
@@ -1091,7 +1789,7 @@ app.exec()
         (function() {
             
 
-            var uiPy = "# -*- coding: utf-8 -*-\n\n# Form implementation generated from reading ui file 'ui.ui'\n#\n# Created by: PyQt5 UI code generator 5.15.11\n#\n# WARNING: Any manual changes made to this file will be lost when pyuic5 is\n# run again.  Do not edit this file unless you know what you are doing.\n\n\nfrom PyQt5 import QtCore, QtGui, QtWidgets\n\n\nclass Ui_MainWindow(object):\n    def setupUi(self, MainWindow):\n        MainWindow.setObjectName(\"MainWindow\")\n        MainWindow.resize(1297, 845)\n        self.centralwidget = QtWidgets.QWidget(MainWindow)\n        self.centralwidget.setObjectName(\"centralwidget\")\n        self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)\n        self.tableWidget.setGeometry(QtCore.QRect(650, 70, 571, 261))\n        self.tableWidget.setObjectName(\"tableWidget\")\n        self.tableWidget.setColumnCount(4)\n        self.tableWidget.setRowCount(6)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(3, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(4, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(5, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(3, item)\n        self.pushButton_2 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_2.setGeometry(QtCore.QRect(470, 10, 261, 51))\n        font = QtGui.QFont()\n        font.setPointSize(11)\n        font.setBold(False)\n        font.setWeight(50)\n        self.pushButton_2.setFont(font)\n        self.pushButton_2.setStyleSheet(\"color:red\")\n        self.pushButton_2.setObjectName(\"pushButton_2\")\n        self.horizontalSlider_5 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_5.setGeometry(QtCore.QRect(90, 500, 451, 22))\n        self.horizontalSlider_5.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_5.setObjectName(\"horizontalSlider_5\")\n        self.horizontalSlider = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider.setGeometry(QtCore.QRect(90, 200, 451, 22))\n        self.horizontalSlider.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider.setObjectName(\"horizontalSlider\")\n        self.textBrowser = QtWidgets.QTextBrowser(self.centralwidget)\n        self.textBrowser.setGeometry(QtCore.QRect(20, 610, 571, 171))\n        self.textBrowser.setObjectName(\"textBrowser\")\n        self.horizontalSlider_4 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_4.setGeometry(QtCore.QRect(90, 440, 451, 22))\n        self.horizontalSlider_4.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_4.setObjectName(\"horizontalSlider_4\")\n        self.horizontalSlider_6 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_6.setGeometry(QtCore.QRect(90, 380, 451, 22))\n        self.horizontalSlider_6.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_6.setObjectName(\"horizontalSlider_6\")\n        self.pushButton = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton.setGeometry(QtCore.QRect(120, 10, 101, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton.setFont(font)\n        self.pushButton.setObjectName(\"pushButton\")\n        self.horizontalSlider_2 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_2.setGeometry(QtCore.QRect(90, 260, 451, 22))\n        self.horizontalSlider_2.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_2.setObjectName(\"horizontalSlider_2\")\n        self.pushButton_5 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_5.setGeometry(QtCore.QRect(750, 10, 291, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_5.setFont(font)\n        self.pushButton_5.setObjectName(\"pushButton_5\")\n        self.pushButton_7 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_7.setGeometry(QtCore.QRect(610, 410, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_7.setFont(font)\n        self.pushButton_7.setObjectName(\"pushButton_7\")\n        self.pushButton_3 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_3.setGeometry(QtCore.QRect(240, 10, 211, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_3.setFont(font)\n        self.pushButton_3.setObjectName(\"pushButton_3\")\n        self.pushButton_4 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_4.setGeometry(QtCore.QRect(20, 80, 431, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_4.setFont(font)\n        self.pushButton_4.setObjectName(\"pushButton_4\")\n        self.tableWidget_2 = QtWidgets.QTableWidget(self.centralwidget)\n        self.tableWidget_2.setGeometry(QtCore.QRect(650, 340, 581, 181))\n        self.tableWidget_2.setObjectName(\"tableWidget_2\")\n        self.tableWidget_2.setColumnCount(4)\n        self.tableWidget_2.setRowCount(4)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(3, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(3, item)\n        self.pushButton_8 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_8.setGeometry(QtCore.QRect(610, 450, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_8.setFont(font)\n        self.pushButton_8.setObjectName(\"pushButton_8\")\n        self.pushButton_9 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_9.setGeometry(QtCore.QRect(610, 490, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_9.setFont(font)\n        self.pushButton_9.setObjectName(\"pushButton_9\")\n        self.pushButton_6 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_6.setGeometry(QtCore.QRect(610, 380, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_6.setFont(font)\n        self.pushButton_6.setObjectName(\"pushButton_6\")\n        self.horizontalSlider_3 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_3.setGeometry(QtCore.QRect(90, 320, 451, 22))\n        self.horizontalSlider_3.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_3.setObjectName(\"horizontalSlider_3\")\n        self.comboBox = QtWidgets.QComboBox(self.centralwidget)\n        self.comboBox.setGeometry(QtCore.QRect(180, 140, 171, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.comboBox.setFont(font)\n        self.comboBox.setObjectName(\"comboBox\")\n        self.comboBox.addItem(\"\")\n        self.comboBox.addItem(\"\")\n        self.label = QtWidgets.QLabel(self.centralwidget)\n        self.label.setGeometry(QtCore.QRect(20, 190, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label.setFont(font)\n        self.label.setObjectName(\"label\")\n        self.label_2 = QtWidgets.QLabel(self.centralwidget)\n        self.label_2.setGeometry(QtCore.QRect(20, 250, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_2.setFont(font)\n        self.label_2.setObjectName(\"label_2\")\n        self.label_3 = QtWidgets.QLabel(self.centralwidget)\n        self.label_3.setGeometry(QtCore.QRect(20, 310, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_3.setFont(font)\n        self.label_3.setObjectName(\"label_3\")\n        self.label_4 = QtWidgets.QLabel(self.centralwidget)\n        self.label_4.setGeometry(QtCore.QRect(20, 370, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_4.setFont(font)\n        self.label_4.setObjectName(\"label_4\")\n        self.label_5 = QtWidgets.QLabel(self.centralwidget)\n        self.label_5.setGeometry(QtCore.QRect(20, 430, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_5.setFont(font)\n        self.label_5.setObjectName(\"label_5\")\n        self.label_6 = QtWidgets.QLabel(self.centralwidget)\n        self.label_6.setGeometry(QtCore.QRect(20, 490, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_6.setFont(font)\n        self.label_6.setObjectName(\"label_6\")\n        self.label_7 = QtWidgets.QLabel(self.centralwidget)\n        self.label_7.setGeometry(QtCore.QRect(30, 560, 81, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_7.setFont(font)\n        self.label_7.setObjectName(\"label_7\")\n        self.checkBox = QtWidgets.QCheckBox(self.centralwidget)\n        self.checkBox.setGeometry(QtCore.QRect(620, 680, 261, 31))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        self.checkBox.setFont(font)\n        self.checkBox.setObjectName(\"checkBox\")\n        self.checkBox_2 = QtWidgets.QCheckBox(self.centralwidget)\n        self.checkBox_2.setGeometry(QtCore.QRect(620, 740, 251, 21))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        self.checkBox_2.setFont(font)\n        self.checkBox_2.setObjectName(\"checkBox_2\")\n        self.pushButton_10 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_10.setGeometry(QtCore.QRect(30, 10, 71, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_10.setFont(font)\n        self.pushButton_10.setObjectName(\"pushButton_10\")\n        self.label_8 = QtWidgets.QLabel(self.centralwidget)\n        self.label_8.setGeometry(QtCore.QRect(980, 710, 41, 41))\n        self.label_8.setText(\"\")\n        self.label_8.setObjectName(\"label_8\")\n        self.label_9 = QtWidgets.QLabel(self.centralwidget)\n        self.label_9.setGeometry(QtCore.QRect(1050, 710, 41, 41))\n        self.label_9.setText(\"\")\n        self.label_9.setObjectName(\"label_9\")\n        self.label_10 = QtWidgets.QLabel(self.centralwidget)\n        self.label_10.setGeometry(QtCore.QRect(1120, 710, 41, 41))\n        self.label_10.setText(\"\")\n        self.label_10.setObjectName(\"label_10\")\n        self.label_11 = QtWidgets.QLabel(self.centralwidget)\n        self.label_11.setGeometry(QtCore.QRect(1190, 710, 41, 41))\n        self.label_11.setText(\"\")\n        self.label_11.setObjectName(\"label_11\")\n        MainWindow.setCentralWidget(self.centralwidget)\n        self.menubar = QtWidgets.QMenuBar(MainWindow)\n        self.menubar.setGeometry(QtCore.QRect(0, 0, 1297, 26))\n        self.menubar.setObjectName(\"menubar\")\n        MainWindow.setMenuBar(self.menubar)\n        self.statusbar = QtWidgets.QStatusBar(MainWindow)\n        self.statusbar.setObjectName(\"statusbar\")\n        MainWindow.setStatusBar(self.statusbar)\n\n        self.retranslateUi(MainWindow)\n        QtCore.QMetaObject.connectSlotsByName(MainWindow)\n\n    def retranslateUi(self, MainWindow):\n        _translate = QtCore.QCoreApplication.translate\n        MainWindow.setWindowTitle(_translate(\"MainWindow\", \"MainWindow\"))\n        item = self.tableWidget.verticalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"1 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"2 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"3 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"4 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(4)\n        item.setText(_translate(\"MainWindow\", \"5 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(5)\n        item.setText(_translate(\"MainWindow\", \"6 мотор\"))\n        item = self.tableWidget.horizontalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"Температура\"))\n        item = self.tableWidget.horizontalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"тики\"))\n        item = self.tableWidget.horizontalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"радианы\"))\n        item = self.tableWidget.horizontalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"градусы\"))\n        self.pushButton_2.setText(_translate(\"MainWindow\", \"Экстренное торможение\"))\n        self.pushButton.setText(_translate(\"MainWindow\", \"пауза\"))\n        self.pushButton_5.setText(_translate(\"MainWindow\", \"Сохранить состояние системы\"))\n        self.pushButton_7.setText(_translate(\"MainWindow\", \"+\"))\n        self.pushButton_3.setText(_translate(\"MainWindow\", \"Возвращение на старт \"))\n        self.pushButton_4.setText(_translate(\"MainWindow\", \"Начало работы в ручном режиме управления\"))\n        item = self.tableWidget_2.verticalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"красный\"))\n        item = self.tableWidget_2.verticalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"зеленый\"))\n        item = self.tableWidget_2.verticalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"синий\"))\n        item = self.tableWidget_2.verticalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"Брак\"))\n        item = self.tableWidget_2.horizontalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"кол-во\"))\n        item = self.tableWidget_2.horizontalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"время последнего перемещения\"))\n        item = self.tableWidget_2.horizontalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"зеленый\"))\n        item = self.tableWidget_2.horizontalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"брак\"))\n        self.pushButton_8.setText(_translate(\"MainWindow\", \"+\"))\n        self.pushButton_9.setText(_translate(\"MainWindow\", \"+\"))\n        self.pushButton_6.setText(_translate(\"MainWindow\", \"+\"))\n        self.comboBox.setItemText(0, _translate(\"MainWindow\", \"по координатам\"))\n        self.comboBox.setItemText(1, _translate(\"MainWindow\", \"по градусам\"))\n        self.label.setText(_translate(\"MainWindow\", \"X\"))\n        self.label_2.setText(_translate(\"MainWindow\", \"Y\"))\n        self.label_3.setText(_translate(\"MainWindow\", \"Z\"))\n        self.label_4.setText(_translate(\"MainWindow\", \"Rx\"))\n        self.label_5.setText(_translate(\"MainWindow\", \"Ry\"))\n        self.label_6.setText(_translate(\"MainWindow\", \"Rz\"))\n        self.label_7.setText(_translate(\"MainWindow\", \"Логи:\"))\n        self.checkBox.setText(_translate(\"MainWindow\", \"Захват(вкл/выкл)\"))\n        self.checkBox_2.setText(_translate(\"MainWindow\", \"конвейер(вкл/выкл)\"))\n        self.pushButton_10.setText(_translate(\"MainWindow\", \"Старт\"))";
+            var uiPy = "# -*- coding: utf-8 -*-\n\n# Form implementation generated from reading ui file 'ui.ui'\n#\n# Created by: PyQt5 UI code generator 5.15.11\n#\n# WARNING: Any manual changes made to this file will be lost when pyuic5 is\n# run again.  Do not edit this file unless you know what you are doing.\n\n\nfrom PyQt5 import QtCore, QtGui, QtWidgets\n\n\nclass Ui_MainWindow(object):\n    def setupUi(self, MainWindow):\n        MainWindow.setObjectName(\"MainWindow\")\n        MainWindow.resize(1297, 845)\n        self.centralwidget = QtWidgets.QWidget(MainWindow)\n        self.centralwidget.setObjectName(\"centralwidget\")\n        self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)\n        self.tableWidget.setGeometry(QtCore.QRect(650, 70, 571, 261))\n        self.tableWidget.setObjectName(\"tableWidget\")\n        self.tableWidget.setColumnCount(4)\n        self.tableWidget.setRowCount(6)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(3, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(4, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setVerticalHeaderItem(5, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget.setHorizontalHeaderItem(3, item)\n        self.pushButton_2 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_2.setGeometry(QtCore.QRect(470, 10, 261, 51))\n        font = QtGui.QFont()\n        font.setPointSize(11)\n        font.setBold(False)\n        font.setWeight(50)\n        self.pushButton_2.setFont(font)\n        self.pushButton_2.setStyleSheet(\"color:red\")\n        self.pushButton_2.setObjectName(\"pushButton_2\")\n        self.horizontalSlider_5 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_5.setGeometry(QtCore.QRect(90, 500, 451, 22))\n        self.horizontalSlider_5.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_5.setObjectName(\"horizontalSlider_5\")\n        self.horizontalSlider = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider.setGeometry(QtCore.QRect(90, 200, 451, 22))\n        self.horizontalSlider.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider.setObjectName(\"horizontalSlider\")\n        self.textBrowser = QtWidgets.QTextBrowser(self.centralwidget)\n        self.textBrowser.setGeometry(QtCore.QRect(20, 610, 571, 171))\n        self.textBrowser.setObjectName(\"textBrowser\")\n        self.horizontalSlider_4 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_4.setGeometry(QtCore.QRect(90, 440, 451, 22))\n        self.horizontalSlider_4.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_4.setObjectName(\"horizontalSlider_4\")\n        self.horizontalSlider_6 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_6.setGeometry(QtCore.QRect(90, 380, 451, 22))\n        self.horizontalSlider_6.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_6.setObjectName(\"horizontalSlider_6\")\n        self.pushButton = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton.setGeometry(QtCore.QRect(120, 10, 101, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton.setFont(font)\n        self.pushButton.setObjectName(\"pushButton\")\n        self.horizontalSlider_2 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_2.setGeometry(QtCore.QRect(90, 260, 451, 22))\n        self.horizontalSlider_2.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_2.setObjectName(\"horizontalSlider_2\")\n        self.pushButton_5 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_5.setGeometry(QtCore.QRect(750, 10, 291, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_5.setFont(font)\n        self.pushButton_5.setObjectName(\"pushButton_5\")\n        self.pushButton_7 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_7.setGeometry(QtCore.QRect(610, 410, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_7.setFont(font)\n        self.pushButton_7.setObjectName(\"pushButton_7\")\n        self.pushButton_3 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_3.setGeometry(QtCore.QRect(240, 10, 211, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_3.setFont(font)\n        self.pushButton_3.setObjectName(\"pushButton_3\")\n        self.pushButton_4 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_4.setGeometry(QtCore.QRect(20, 80, 431, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_4.setFont(font)\n        self.pushButton_4.setObjectName(\"pushButton_4\")\n        self.tableWidget_2 = QtWidgets.QTableWidget(self.centralwidget)\n        self.tableWidget_2.setGeometry(QtCore.QRect(650, 340, 581, 181))\n        self.tableWidget_2.setObjectName(\"tableWidget_2\")\n        self.tableWidget_2.setColumnCount(3)\n        self.tableWidget_2.setRowCount(4)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(2, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setVerticalHeaderItem(3, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(0, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(1, item)\n        item = QtWidgets.QTableWidgetItem()\n        self.tableWidget_2.setHorizontalHeaderItem(2, item)\n        self.pushButton_8 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_8.setGeometry(QtCore.QRect(610, 450, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_8.setFont(font)\n        self.pushButton_8.setObjectName(\"pushButton_8\")\n        self.pushButton_9 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_9.setGeometry(QtCore.QRect(610, 490, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_9.setFont(font)\n        self.pushButton_9.setObjectName(\"pushButton_9\")\n        self.pushButton_6 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_6.setGeometry(QtCore.QRect(610, 380, 31, 28))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_6.setFont(font)\n        self.pushButton_6.setObjectName(\"pushButton_6\")\n        self.horizontalSlider_3 = QtWidgets.QSlider(self.centralwidget)\n        self.horizontalSlider_3.setGeometry(QtCore.QRect(90, 320, 451, 22))\n        self.horizontalSlider_3.setOrientation(QtCore.Qt.Horizontal)\n        self.horizontalSlider_3.setObjectName(\"horizontalSlider_3\")\n        self.comboBox = QtWidgets.QComboBox(self.centralwidget)\n        self.comboBox.setGeometry(QtCore.QRect(180, 140, 171, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.comboBox.setFont(font)\n        self.comboBox.setObjectName(\"comboBox\")\n        self.comboBox.addItem(\"\")\n        self.comboBox.addItem(\"\")\n        self.label = QtWidgets.QLabel(self.centralwidget)\n        self.label.setGeometry(QtCore.QRect(20, 190, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label.setFont(font)\n        self.label.setObjectName(\"label\")\n        self.label_2 = QtWidgets.QLabel(self.centralwidget)\n        self.label_2.setGeometry(QtCore.QRect(20, 250, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_2.setFont(font)\n        self.label_2.setObjectName(\"label_2\")\n        self.label_3 = QtWidgets.QLabel(self.centralwidget)\n        self.label_3.setGeometry(QtCore.QRect(20, 310, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_3.setFont(font)\n        self.label_3.setObjectName(\"label_3\")\n        self.label_4 = QtWidgets.QLabel(self.centralwidget)\n        self.label_4.setGeometry(QtCore.QRect(20, 370, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_4.setFont(font)\n        self.label_4.setObjectName(\"label_4\")\n        self.label_5 = QtWidgets.QLabel(self.centralwidget)\n        self.label_5.setGeometry(QtCore.QRect(20, 430, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_5.setFont(font)\n        self.label_5.setObjectName(\"label_5\")\n        self.label_6 = QtWidgets.QLabel(self.centralwidget)\n        self.label_6.setGeometry(QtCore.QRect(20, 490, 41, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_6.setFont(font)\n        self.label_6.setObjectName(\"label_6\")\n        self.label_7 = QtWidgets.QLabel(self.centralwidget)\n        self.label_7.setGeometry(QtCore.QRect(30, 560, 81, 41))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        font.setBold(True)\n        font.setWeight(75)\n        self.label_7.setFont(font)\n        self.label_7.setObjectName(\"label_7\")\n        self.checkBox = QtWidgets.QCheckBox(self.centralwidget)\n        self.checkBox.setGeometry(QtCore.QRect(620, 680, 261, 31))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        self.checkBox.setFont(font)\n        self.checkBox.setObjectName(\"checkBox\")\n        self.checkBox_2 = QtWidgets.QCheckBox(self.centralwidget)\n        self.checkBox_2.setGeometry(QtCore.QRect(620, 740, 251, 21))\n        font = QtGui.QFont()\n        font.setPointSize(14)\n        self.checkBox_2.setFont(font)\n        self.checkBox_2.setObjectName(\"checkBox_2\")\n        self.pushButton_10 = QtWidgets.QPushButton(self.centralwidget)\n        self.pushButton_10.setGeometry(QtCore.QRect(30, 10, 71, 51))\n        font = QtGui.QFont()\n        font.setPointSize(10)\n        self.pushButton_10.setFont(font)\n        self.pushButton_10.setObjectName(\"pushButton_10\")\n        self.label_8 = QtWidgets.QLabel(self.centralwidget)\n        self.label_8.setGeometry(QtCore.QRect(980, 710, 41, 41))\n        self.label_8.setText(\"\")\n        self.label_8.setObjectName(\"label_8\")\n        self.label_9 = QtWidgets.QLabel(self.centralwidget)\n        self.label_9.setGeometry(QtCore.QRect(1050, 710, 41, 41))\n        self.label_9.setText(\"\")\n        self.label_9.setObjectName(\"label_9\")\n        self.label_10 = QtWidgets.QLabel(self.centralwidget)\n        self.label_10.setGeometry(QtCore.QRect(1120, 710, 41, 41))\n        self.label_10.setText(\"\")\n        self.label_10.setObjectName(\"label_10\")\n        self.label_11 = QtWidgets.QLabel(self.centralwidget)\n        self.label_11.setGeometry(QtCore.QRect(1190, 710, 41, 41))\n        self.label_11.setText(\"\")\n        self.label_11.setObjectName(\"label_11\")\n        MainWindow.setCentralWidget(self.centralwidget)\n        self.menubar = QtWidgets.QMenuBar(MainWindow)\n        self.menubar.setGeometry(QtCore.QRect(0, 0, 1297, 26))\n        self.menubar.setObjectName(\"menubar\")\n        MainWindow.setMenuBar(self.menubar)\n        self.statusbar = QtWidgets.QStatusBar(MainWindow)\n        self.statusbar.setObjectName(\"statusbar\")\n        MainWindow.setStatusBar(self.statusbar)\n\n        self.retranslateUi(MainWindow)\n        QtCore.QMetaObject.connectSlotsByName(MainWindow)\n\n    def retranslateUi(self, MainWindow):\n        _translate = QtCore.QCoreApplication.translate\n        MainWindow.setWindowTitle(_translate(\"MainWindow\", \"MainWindow\"))\n        item = self.tableWidget.verticalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"1 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"2 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"3 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"4 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(4)\n        item.setText(_translate(\"MainWindow\", \"5 мотор\"))\n        item = self.tableWidget.verticalHeaderItem(5)\n        item.setText(_translate(\"MainWindow\", \"6 мотор\"))\n        item = self.tableWidget.horizontalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"Температура\"))\n        item = self.tableWidget.horizontalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"тики\"))\n        item = self.tableWidget.horizontalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"радианы\"))\n        item = self.tableWidget.horizontalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"градусы\"))\n        self.pushButton_2.setText(_translate(\"MainWindow\", \"Экстренное торможение\"))\n        self.pushButton.setText(_translate(\"MainWindow\", \"пауза\"))\n        self.pushButton_5.setText(_translate(\"MainWindow\", \"Сохранить состояние системы\"))\n        self.pushButton_7.setText(_translate(\"MainWindow\", \"+\"))\n        self.pushButton_3.setText(_translate(\"MainWindow\", \"Возвращение на старт \"))\n        self.pushButton_4.setText(_translate(\"MainWindow\", \"Начало работы в ручном режиме управления\"))\n        item = self.tableWidget_2.verticalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"красный\"))\n        item = self.tableWidget_2.verticalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"зеленый\"))\n        item = self.tableWidget_2.verticalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"синий\"))\n        item = self.tableWidget_2.verticalHeaderItem(3)\n        item.setText(_translate(\"MainWindow\", \"Брак\"))\n        item = self.tableWidget_2.horizontalHeaderItem(0)\n        item.setText(_translate(\"MainWindow\", \"кол-во\"))\n        item = self.tableWidget_2.horizontalHeaderItem(1)\n        item.setText(_translate(\"MainWindow\", \"время последнего перемещения\"))\n        item = self.tableWidget_2.horizontalHeaderItem(2)\n        item.setText(_translate(\"MainWindow\", \"брак\"))\n        self.pushButton_8.setText(_translate(\"MainWindow\", \"+\"))\n        self.pushButton_9.setText(_translate(\"MainWindow\", \"+\"))\n        self.pushButton_6.setText(_translate(\"MainWindow\", \"+\"))\n        self.comboBox.setItemText(0, _translate(\"MainWindow\", \"по координатам\"))\n        self.comboBox.setItemText(1, _translate(\"MainWindow\", \"по градусам\"))\n        self.label.setText(_translate(\"MainWindow\", \"X\"))\n        self.label_2.setText(_translate(\"MainWindow\", \"Y\"))\n        self.label_3.setText(_translate(\"MainWindow\", \"Z\"))\n        self.label_4.setText(_translate(\"MainWindow\", \"Rx\"))\n        self.label_5.setText(_translate(\"MainWindow\", \"Ry\"))\n        self.label_6.setText(_translate(\"MainWindow\", \"Rz\"))\n        self.label_7.setText(_translate(\"MainWindow\", \"Логи:\"))\n        self.checkBox.setText(_translate(\"MainWindow\", \"Захват(вкл/выкл)\"))\n        self.checkBox_2.setText(_translate(\"MainWindow\", \"конвейер(вкл/выкл)\"))\n        self.pushButton_10.setText(_translate(\"MainWindow\", \"Старт\"))\n";
 
             document.getElementById('main-py-code').textContent = document.getElementById('main-py-raw').textContent;
             document.getElementById('ui-py-code').textContent = uiPy;
