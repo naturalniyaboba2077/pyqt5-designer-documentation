@@ -902,6 +902,13 @@ try:
 except ImportError:
     HAS_OPENCV = False
 
+try:
+    from ultralytics import YOLO
+    HAS_YOLO = True
+except ImportError:
+    HAS_YOLO = False
+    YOLO = None
+
 
 def time_str():
     return datetime.now().strftime("%H:%M:%S")
@@ -932,14 +939,17 @@ class Log:
 class VideoWorker(QThread):
     frame_ready = pyqtSignal(object)
     detection_ready = pyqtSignal(dict)
+    camera_error = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._running = False
         self._detect = False
         self._defect = False
+        self._use_yolo = False
         self._classes = {"red": True, "green": True, "blue": True}
         self._cap = None
+        self._yolo_model = None
 
     def set_running(self, v):
         self._running = v
@@ -950,42 +960,114 @@ class VideoWorker(QThread):
     def set_defect(self, v):
         self._defect = v
 
+    def set_use_yolo(self, v):
+        self._use_yolo = v and HAS_YOLO
+
     def set_classes(self, d):
         self._classes = d
+
+    def _ensure_yolo(self):
+        if not HAS_YOLO or self._yolo_model is not None:
+            return
+        try:
+            self._yolo_model = YOLO("yolov8n.pt")
+        except Exception:
+            self._yolo_model = False
+
+    def _largest_contour_rect(self, mask):
+        res = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts = res[0] if len(res) == 2 else res[1]
+        if not cnts:
+            return None, 0.0
+        largest = max(cnts, key=cv2.contourArea)
+        area = cv2.contourArea(largest)
+        if area < 500:
+            return None, 0.0
+        x, y, w, h = cv2.boundingRect(largest)
+        h_frame, w_frame = mask.shape[:2]
+        area_ratio = area / (w_frame * h_frame)
+        return (x, y, x + w, y + h), min(1.0, area_ratio * 10)
 
     def run(self):
         if not HAS_OPENCV:
             return
         self._cap = cv2.VideoCapture(0)
-        if not self._cap.isOpened():
+        if not self._cap.isOpened() and HAS_OPENCV:
+            try:
+                self._cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            except Exception:
+                pass
+        if not self._cap or not self._cap.isOpened():
+            self.camera_error.emit("не удалось открыть камеру, проверьте подключение и права доступа.")
             return
+        if self._use_yolo:
+            self._ensure_yolo()
         while self._running and self._cap.isOpened():
             ret, frame = self._cap.read()
             if not ret:
                 continue
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            h, w = frame.shape[:2]
+            if self._use_yolo and self._yolo_model is None:
+                self._ensure_yolo()
+            frame_bgr = frame
             out = frame.copy()
             det = {"class": None, "iou": 0.0}
-            if self._detect:
-                roi = frame[h//4:3*h//4, w//4:3*w//4]
-                if roi.size > 0:
-                    b, g, r = cv2.split(roi)
-                    mr, mg, mb = r.mean(), g.mean(), b.mean()
-                    if self._classes.get("red") and mr > 120 and mr > mg and mr > mb:
-                        det = {"class": "red", "iou": min(1.0, mr/200)}
-                    elif self._classes.get("green") and mg > 120 and mg > mr and mg > mb:
-                        det = {"class": "green", "iou": min(1.0, mg/200)}
-                    elif self._classes.get("blue") and mb > 120 and mb > mr and mb > mg:
-                        det = {"class": "blue", "iou": min(1.0, mb/200)}
-                    elif self._defect and (mr < 80 and mg < 80 and mb < 80):
-                        det = {"class": "брак", "iou": 0.5}
-                    cx, cy = w//4 + roi.shape[1]//2, h//4 + roi.shape[0]//2
-                    r = min(roi.shape[0], roi.shape[1])//4
-                    cv2.rectangle(out, (cx-r, cy-r), (cx+r, cy+r), (0, 255, 0), 2)
-                    if det["class"]:
-                        cv2.putText(out, det["class"], (cx-r, cy-r-5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
-                        cv2.putText(out, "IoU:%.2f" % det["iou"], (cx-r, cy+r+18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1)
+            if self._use_yolo and self._yolo_model:
+                try:
+                    results = self._yolo_model(frame_bgr, verbose=False)
+                    out = results[0].plot()
+                    for box in results[0].boxes:
+                        cls_id = int(box.cls[0])
+                        conf = float(box.conf[0])
+                        name = results[0].names.get(cls_id, "?")
+                        det = {"class": name, "iou": conf}
+                        break
+                except Exception:
+                    pass
+            elif self._detect:
+                h, w = frame_bgr.shape[:2]
+                frame_hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
+                best_rect = None
+                best_class = None
+                best_iou = 0.0
+                if self._classes.get("red"):
+                    low = (0, 100, 100)
+                    high = (10, 255, 255)
+                    mask1 = cv2.inRange(frame_hsv, low, high)
+                    low2 = (170, 100, 100)
+                    high2 = (180, 255, 255)
+                    mask2 = cv2.inRange(frame_hsv, low2, high2)
+                    mask = cv2.bitwise_or(mask1, mask2)
+                    rect, iou = self._largest_contour_rect(mask)
+                    if rect is not None and iou > best_iou:
+                        best_rect, best_class, best_iou = rect, "red", iou
+                if self._classes.get("green"):
+                    low = (35, 100, 100)
+                    high = (85, 255, 255)
+                    mask = cv2.inRange(frame_hsv, low, high)
+                    rect, iou = self._largest_contour_rect(mask)
+                    if rect is not None and iou > best_iou:
+                        best_rect, best_class, best_iou = rect, "green", iou
+                if self._classes.get("blue"):
+                    low = (100, 100, 100)
+                    high = (130, 255, 255)
+                    mask = cv2.inRange(frame_hsv, low, high)
+                    rect, iou = self._largest_contour_rect(mask)
+                    if rect is not None and iou > best_iou:
+                        best_rect, best_class, best_iou = rect, "blue", iou
+                if self._defect:
+                    low = (0, 0, 0)
+                    high = (180, 80, 80)
+                    mask = cv2.inRange(frame_hsv, low, high)
+                    rect, iou = self._largest_contour_rect(mask)
+                    if rect is not None and iou > best_iou and iou > 0.02:
+                        best_rect, best_class, best_iou = rect, "брак", max(iou, 0.5)
+                if best_rect is not None and best_class is not None:
+                    det = {"class": best_class, "iou": best_iou}
+                    x1, y1, x2, y2 = best_rect
+                    cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(out, best_class, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    cv2.putText(out, "IoU:%.2f" % best_iou, (x1, y2 + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+            out = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
             qimg = QImage(out.data, out.shape[1], out.shape[0], out.strides[0], QImage.Format_RGB888)
             self.frame_ready.emit(qimg)
             self.detection_ready.emit(det)
@@ -1021,6 +1103,7 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         self.video_worker = VideoWorker(self)
         self.video_worker.frame_ready.connect(self.on_video_frame)
         self.video_worker.detection_ready.connect(self.on_detection)
+        self.video_worker.camera_error.connect(self.on_camera_error)
 
         self.setupUi(self)
         self.centralwidget.setMinimumSize(1280, 800)
@@ -1040,11 +1123,11 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         lay_a.addLayout(row_path)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(wrap_a, "Модуль А — Ручной режим")
+        self.tabs.addTab(wrap_a, "Ручное управление")
         self.tab_b = self._build_tab_b()
-        self.tabs.addTab(self.tab_b, "Модуль Б — Автоматический режим")
+        self.tabs.addTab(self.tab_b, "автоматическое упарвление")
         self.tab_c = self._build_tab_c()
-        self.tabs.addTab(self.tab_c, "Модуль В — Компьютерное зрение и ИИ")
+        self.tabs.addTab(self.tab_c, "Компьютерное зрение и ии")
         self.setCentralWidget(self.tabs)
 
         self.tableWidget_2.itemChanged.connect(self.on_stats_count_edited)
@@ -1060,19 +1143,14 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         self.pushButton_7.clicked.connect(lambda: self.stats_plus(1))
         self.pushButton_8.clicked.connect(lambda: self.stats_plus(2))
         self.pushButton_9.clicked.connect(lambda: self.stats_plus(3))
-        self.checkBox.stateChanged.connect(self.check_gripper)   # Захват вкл/выкл -> tool_on / tool_off (API)
-        self.checkBox_2.stateChanged.connect(self.check_conveyor)  # Конвейер вкл/выкл -> conveyer_start / conveyer_stop (API)
-        # Порядок по вертикали в UI: J1,J2,J3 — slider, slider_2, slider_3; J4,J5,J6 — slider_6, slider_4, slider_5
+        self.checkBox.stateChanged.connect(self.check_gripper)
+        self.checkBox_2.stateChanged.connect(self.check_conveyor)
         self.sliders_list = [
             self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3,
             self.horizontalSlider_6, self.horizontalSlider_4, self.horizontalSlider_5
         ]
-        self.horizontalSlider.valueChanged.connect(self.mot1)   # J1 -> мотор 1
-        self.horizontalSlider_2.valueChanged.connect(self.mot2)  # J2 -> мотор 2
-        self.horizontalSlider_3.valueChanged.connect(self.mot3)   # J3 -> мотор 3
-        self.horizontalSlider_6.valueChanged.connect(self.mot4)   # J4 -> мотор 4
-        self.horizontalSlider_4.valueChanged.connect(self.mot5)  # J5 -> мотор 5
-        self.horizontalSlider_5.valueChanged.connect(self.mot6)   # J6 -> мотор 6
+        for i, s in enumerate([self.horizontalSlider, self.horizontalSlider_2, self.horizontalSlider_3, self.horizontalSlider_6, self.horizontalSlider_4, self.horizontalSlider_5]):
+            s.valueChanged.connect(lambda v, idx=i: self._set_motor(idx, v))
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updates)
         self.timer.start(50)
@@ -1112,48 +1190,48 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         self.btn_add_red_b = QPushButton("Добавить красный")
         self.btn_add_red_b.clicked.connect(lambda: self.add_to_list_b("red"))
         row_bt.addWidget(self.btn_add_red_b)
-        self.btn_add_green_b = QPushButton("Добавить зелёный")
+        self.btn_add_green_b = QPushButton("добавить зелёный")
         self.btn_add_green_b.clicked.connect(lambda: self.add_to_list_b("green"))
         row_bt.addWidget(self.btn_add_green_b)
-        self.btn_add_blue_b = QPushButton("Добавить синий")
+        self.btn_add_blue_b = QPushButton("добавить синий")
         self.btn_add_blue_b.clicked.connect(lambda: self.add_to_list_b("blue"))
         row_bt.addWidget(self.btn_add_blue_b)
-        self.btn_add_brak_b = QPushButton("Добавить брак")
+        self.btn_add_brak_b = QPushButton("добавить брак")
         self.btn_add_brak_b.clicked.connect(lambda: self.add_to_list_b("брак"))
         row_bt.addWidget(self.btn_add_brak_b)
-        self.btn_del_last_b = QPushButton("Удалить последний добавленный объект")
+        self.btn_del_last_b = QPushButton("удалить последний добавленный объект")
         self.btn_del_last_b.clicked.connect(self.del_last_b)
         row_bt.addWidget(self.btn_del_last_b)
-        self.btn_clear_b = QPushButton("Очистить список")
+        self.btn_clear_b = QPushButton("очистить список")
         self.btn_clear_b.clicked.connect(self.clear_list_b)
         row_bt.addWidget(self.btn_clear_b)
         gl.addLayout(row_bt)
         lay.addWidget(g)
         row_sess = QHBoxLayout()
-        row_sess.addWidget(QLabel("Путь сохранения сессии:"))
+        row_sess.addWidget(QLabel("путь сохранения сессии:"))
         self.edit_session_path = QLineEdit()
         self.edit_session_path.setPlaceholderText("C:\\путь\\session.txt")
         row_sess.addWidget(self.edit_session_path)
-        self.btn_save_session = QPushButton("Сохранить сессию в файл")
+        self.btn_save_session = QPushButton("сохранить сессию в файл")
         self.btn_save_session.clicked.connect(self.save_session_b)
         row_sess.addWidget(self.btn_save_session)
         lay.addLayout(row_sess)
-        g2 = QGroupBox("Ячейки тары по категориям")
+        g2 = QGroupBox("ячейки тары по категориям")
         gl2 = QGridLayout(g2)
         self.cell_labels_b = []
         for i, name in enumerate(["Красный", "Зелёный", "Синий", "Брак"]):
             gl2.addWidget(QLabel(name), i, 0)
-            lb = QLabel("Свободна")
+            lb = QLabel("свободна")
             self.cell_labels_b.append(lb)
             gl2.addWidget(lb, i, 1)
-            btn_nc = QPushButton("Новая ячейка")
+            btn_nc = QPushButton("новая ячейка")
             btn_nc.clicked.connect(lambda checked, idx=i: self.new_cell_b(idx))
             gl2.addWidget(btn_nc, i, 2)
         lay.addWidget(g2)
-        self.btn_start_points_b = QPushButton("Начать движение по заданным точкам")
+        self.btn_start_points_b = QPushButton("начать движение по заданным точкам")
         self.btn_start_points_b.clicked.connect(self.start_movement_by_points_b)
         lay.addWidget(self.btn_start_points_b)
-        lay.addWidget(QLabel("Логи Модуля Б:"))
+        lay.addWidget(QLabel("Логи автоматического режима"))
         self.log_edit_b = QTextEdit()
         self.log_edit_b.setReadOnly(True)
         self.log_edit_b.setMaximumHeight(120)
@@ -1164,13 +1242,21 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
     def _build_tab_c(self):
         w = QWidget()
         lay = QVBoxLayout(w)
-        g = QGroupBox("RGB-видеопоток с детекцией объектов")
+        g = QGroupBox("Модуль камеры")
         gl = QVBoxLayout(g)
-        self.video_label_c = QLabel("Видеопоток (включите детекцию)")
+        self.video_label_c = QLabel("Нажмите «Старт камеры» для видеопотока")
+        self.video_label_c.setObjectName("videoLabel")
         self.video_label_c.setMinimumSize(640, 480)
         self.video_label_c.setStyleSheet("background: #222; color: #888;")
         self.video_label_c.setAlignment(Qt.AlignCenter)
         gl.addWidget(self.video_label_c)
+        row_cam = QHBoxLayout()
+        self.btnStartCam = QPushButton("Старт камеры")
+        self.btnStartCam.setObjectName("btnStartCam")
+        self.btnStartCam.clicked.connect(self.start_camera)
+        row_cam.addWidget(self.btnStartCam)
+        gl.addLayout(row_cam)
+        lay.addWidget(g)
         row_d = QHBoxLayout()
         self.check_detect_c = QCheckBox("Начать детекцию объектов")
         self.check_detect_c.stateChanged.connect(self.toggle_detect_c)
@@ -1178,7 +1264,13 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         self.check_defect_c = QCheckBox("Детекция бракованных объектов")
         self.check_defect_c.stateChanged.connect(lambda s: self.video_worker.set_defect(s == 2))
         row_d.addWidget(self.check_defect_c)
-        lay.addWidget(g)
+        self.check_yolo_c = QCheckBox("Использовать локальный YOLO")
+        self.check_yolo_c.setChecked(False)
+        self.check_yolo_c.stateChanged.connect(lambda s: self.video_worker.set_use_yolo(s == 2))
+        if not HAS_YOLO:
+            self.check_yolo_c.setEnabled(False)
+            self.check_yolo_c.setToolTip("Установите: pip install ultralytics")
+        row_d.addWidget(self.check_yolo_c)
         lay.addLayout(row_d)
         row_cl = QHBoxLayout()
         row_cl.addWidget(QLabel("Классы детекции:"))
@@ -1320,13 +1412,41 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         self.tableWidget_2.blockSignals(False)
         QTimer.singleShot(1500, self.run_auto_points_loop_b)
 
+    def on_camera_error(self, msg):
+        self.btnStartCam.setText("Старт камеры")
+        self.add_log_c("Ошибка: " + msg)
+        QMessageBox.warning(self, "Камера", msg + "\n\nНа Windows попробуйте переустановить opencv-python или проверить, что камера не занята другим приложением.")
+
+    def start_camera(self):
+        if self.video_worker.isRunning():
+            self.video_worker.set_running(False)
+            self.btnStartCam.setText("Старт камеры")
+            self.add_log_c("Камера остановлена")
+            return
+        if not HAS_OPENCV:
+            self.add_log_c("OpenCV не установлен. Выполните: pip install opencv-python")
+            QMessageBox.warning(self, "Камера", "Библиотека OpenCV не найдена.\nУстановите: pip install opencv-python")
+            return
+        new_worker = VideoWorker(self)
+        new_worker.frame_ready.connect(self.on_video_frame)
+        new_worker.detection_ready.connect(self.on_detection)
+        new_worker.camera_error.connect(self.on_camera_error)
+        new_worker.set_detect(self.check_detect_c.isChecked())
+        new_worker.set_defect(self.check_defect_c.isChecked())
+        new_worker.set_use_yolo(self.check_yolo_c.isChecked())
+        new_worker.set_classes({
+            "red": self.check_red_c.isChecked(),
+            "green": self.check_green_c.isChecked(),
+            "blue": self.check_blue_c.isChecked(),
+        })
+        self.video_worker = new_worker
+        self.video_worker.set_running(True)
+        self.video_worker.start()
+        self.btnStartCam.setText("Стоп камеры")
+        self.add_log_c("Камера запущена (OpenCV → QLabel)")
+
     def toggle_detect_c(self, state):
         self.video_worker.set_detect(state == 2)
-        if state == 2 and not self.video_worker.isRunning():
-            self.video_worker.set_running(True)
-            self.video_worker.start()
-        elif state != 2:
-            self.video_worker.set_running(False)
 
     def update_classes_c(self):
         self.video_worker.set_classes({
@@ -1336,7 +1456,14 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         })
 
     def on_video_frame(self, qimg):
-        self.video_label_c.setPixmap(QPixmap.fromImage(qimg).scaled(640, 480, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        pix = QPixmap.fromImage(qimg)
+        lbl_w = self.video_label_c.width()
+        lbl_h = self.video_label_c.height()
+        if lbl_w > 1 and lbl_h > 1:
+            scaled = pix.scaled(lbl_w, lbl_h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            self.video_label_c.setPixmap(scaled)
+        else:
+            self.video_label_c.setPixmap(pix.scaled(640, 480, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def on_detection(self, det):
         if det.get("class") and self.video_worker._detect:
@@ -1353,9 +1480,8 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         for sl in self.sliders_list:
             sl.setEnabled(False)
         if not self.video_worker.isRunning():
-            self.video_worker.set_detect(True)
-            self.video_worker.set_running(True)
-            self.video_worker.start()
+            self.check_detect_c.setChecked(True)
+            self.start_camera()
         self.add_log_c("Начало полностью автоматической сортировки. Ожидание первого объекта.")
         QTimer.singleShot(5000, self.run_full_auto_loop_c)
 
@@ -1365,20 +1491,20 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         person = self.api.get_person() if not self.api.is_demo_mode() else 0
         if person != 0 and self.check_person_c.isChecked():
             self.api.set_lamp("0001")
-            self.add_log_c("Обнаружен человек в рабочей зоне. Детекция остановлена.", highlight=True)
+            self.add_log_c("обнаружен человек в рабочей зоне. детекция остановлена.", highlight=True)
             QTimer.singleShot(3000, self.run_full_auto_loop_c)
             return
         self.person_warning_c.setText("")
         if self.last_detected_class:
             cls = self.last_detected_class
             idx = {"red": 0, "green": 1, "blue": 2, "брак": 3}.get(cls, 0)
-            self.add_log_c("Начало перемещения объекта %s" % cls)
+            self.add_log_c("начало перемещения объекта %s" % cls)
             self.stats_count[idx] += 1
             self.stats_time[idx] = time_str()
             self.tableWidget_2.setItem(idx, 0, QTableWidgetItem(str(self.stats_count[idx])))
             self.tableWidget_2.setItem(idx, 1, QTableWidgetItem(self.stats_time[idx]))
-            self.add_log_c("Завершение перемещения объекта %s" % cls)
-            self.add_log_c("Кол-во: красный=%d, зелёный=%d, синий=%d, брак=%d" % tuple(self.stats_count))
+            self.add_log_c("завершение перемещения объекта %s" % cls)
+            self.add_log_c("кол-во: красный=%d, зелёный=%d, синий=%d, брак=%d" % tuple(self.stats_count))
             self.tableWidget_2.blockSignals(True)
             self.tableWidget_2.setItem(idx, 0, QTableWidgetItem(str(self.stats_count[idx])))
             self.tableWidget_2.setItem(idx, 1, QTableWidgetItem(self.stats_time[idx]))
@@ -1388,7 +1514,7 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         else:
             self.no_object_sec += 5
             if self.no_object_sec >= 20:
-                self.add_log_c("Объектов для детекции нет более 20 сек. Робот возвращается на старт.")
+                self.add_log_c("объектов для детекции нет более 20 сек,робот возвращается на старт.")
                 self.api.move_to_initial_pose()
                 self.no_object_sec = 0
         QTimer.singleShot(5000, self.run_full_auto_loop_c)
@@ -1533,7 +1659,6 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
             self.log.add_logs_with_time("Ручной режим остановлен")
 
     def button_save_state(self):
-        """Сохранение состояния: логи + текущее состояние манипулятора по API."""
         path = self.edit_log_path.text().strip()
         if not path:
             path, _ = QFileDialog.getSaveFileName(self, "Сохранить состояние системы", "", "Текстовые файлы (*.txt)")
@@ -1586,7 +1711,7 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         tool = self.api.get_tool_position()
         if tool:
             coords = ", ".join([str(round(x, 4)) for x in tool])
-            self.log.add_logs_with_time("Текущая координата рабочего инструмента: (" + coords + ") при начале и окончании перемещения объекта")
+            self.log.add_logs_with_time("текущая координата рабочего инструмента: (" + coords + ") при начале и окончании перемещения объекта")
 
     def check_gripper(self, state):
         if state == 2:
@@ -1600,24 +1725,12 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         else:
             self.api.conveyer_stop()
 
-    def mot1(self, p):
-        self.motors[0] = p
-    def mot2(self, p):
-        self.motors[1] = p
-    def mot3(self, p):
-        self.motors[2] = p
-    def mot4(self, p):
-        self.motors[3] = p
-    def mot5(self, p):
-        self.motors[4] = p
-    def mot6(self, p):
-        self.motors[5] = p
+    def _set_motor(self, i, p):
+        self.motors[i] = p
 
     def send_velocity(self):
-        """Все движения только через API: set_joint_velocity / set_cartesian_velocity."""
         if not self.manual_started or not self.turnon or self.emergency:
             return
-        # Позиционное управление: ползунок = целевое положение, скорость пропорциональна ошибке
         kp = 0.35
         deadband_deg = 0.5
         max_vel = 0.05
@@ -1659,33 +1772,10 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
             pass
 
     def updates(self):
-        if self.color == 0:
-            self.label_8.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_9.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_10.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_11.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-        elif self.color == 1:
-            self.label_8.setStyleSheet("background-color: blue; border: 1px solid #333;")
-            self.label_9.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_10.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_11.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-        elif self.color == 2:
-            self.label_8.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_9.setStyleSheet("background-color: green; border: 1px solid #333;")
-            self.label_10.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_11.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-        elif self.color == 3:
-            self.label_8.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_9.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_10.setStyleSheet("background-color: yellow; border: 1px solid #333;")
-            self.label_11.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-        elif self.color == 4:
-            self.label_8.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_9.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_10.setStyleSheet("background-color: white; border: 1px solid #ccc;")
-            self.label_11.setStyleSheet("background-color: red; border: 1px solid #333;")
-
-        # Все данные о положении в таблице — только по получению данных с манипулятора по API
+        lamps = [self.label_8, self.label_9, self.label_10, self.label_11]
+        cols = (["white"]*4, ["blue","white","white","white"], ["white","green","white","white"], ["white","white","yellow","white"], ["white","white","white","red"])
+        for i, lb in enumerate(lamps):
+            lb.setStyleSheet("background-color: %s; border: 1px solid #333;" % (cols[self.color][i] if self.color < 5 else "white"))
         if self.turnon or self.api.is_demo_mode():
             try:
                 temps = self.api.get_actual_temperature()
@@ -1699,19 +1789,15 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
                     self.tableWidget.setItem(i, 4, QTableWidgetItem(str(round(deg_fact, 2))))
             except Exception:
                 pass
-
-        # «Задано» — целевое значение с ползунков (используется в send_velocity через API)
         for i in range(6):
             self.tableWidget.setItem(i, 3, QTableWidgetItem(str(self.motors[i])))
-
-        # Поза инструмента — только по API манипулятора
         try:
             tool = self.api.get_tool_position()
             tool_state = self.api.get_tool_state()
             if tool:
                 coords = ", ".join([str(round(x, 4)) for x in tool])
                 grip = "Закрыт" if tool_state == 1 else "Открыт"
-                self.label_tool_pose.setText("Координаты: %s | Схват: %s" % (coords, grip))
+                self.label_tool_pose.setText("координаты: %s | Схват: %s" % (coords, grip))
         except Exception:
             pass
         try:
@@ -1734,7 +1820,6 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         self.textBrowser.setText(self.log.get_logs())
 
     def closeEvent(self, event):
-        """Закрытие по api.txt: conveyer_stop(), time.sleep(1), disengage(), lamp.setLamp('0001')."""
         self.video_worker.set_running(False)
         if self.video_worker.isRunning():
             self.video_worker.wait(2000)
@@ -1742,7 +1827,7 @@ class Ui_Main(QMainWindow, ui.Ui_MainWindow):
         time.sleep(1)
         self.api.disengage()
         self.api.set_lamp("0001")
-        self.log.add_logs_with_time("Закрытие окна приложения")
+        self.log.add_logs_with_time("закрытие окна приложения")
         event.accept()
 
 
@@ -1750,7 +1835,7 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     window = Ui_Main()
-    window.setWindowTitle("GUI управления манипулятором — Модули А, Б, В")
+    window.setWindowTitle("GUI управления манипулятором — Модули")
     window.resize(1320, 900)
     window.show()
     sys.exit(app.exec_())
